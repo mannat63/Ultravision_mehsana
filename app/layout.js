@@ -1,5 +1,6 @@
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
+import { Analytics } from "@vercel/analytics/react";
 
 export const metadata = {
   title: "Ultra Vision Academy Mehsana | Academic Excellence",
@@ -16,6 +17,7 @@ export default function RootLayout({ children }) {
       <body suppressHydrationWarning>
         <ClerkProvider>
           {children}
+          <Analytics />
         </ClerkProvider>
       </body>
     </html>
