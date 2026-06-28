@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import {
-  UserPlus, IndianRupee, TrendingUp, TrendingDown, Target, AlertTriangle,
+  UserPlus, IndianRupee, TrendingUp, TrendingDown, AlertTriangle,
   Users, BarChart3, GraduationCap, ArrowUpRight, ArrowDownRight,
   ChevronRight, Lightbulb, ShieldAlert, BookOpen, Activity,
   Layers, CircleDollarSign, Percent, AlertCircle, CheckCircle2,
@@ -135,7 +135,7 @@ export default function DirectorDashboard() {
 
   if (!data) return null;
 
-  const { kpi, admissionFunnel, revenueAnalytics, batchIntelligence, studentRisk, examAnalytics, leadCRM, directorInsights } = data;
+  const { kpi, admissionFunnel, revenueAnalytics, batchIntelligence, studentRisk, examAnalytics, directorInsights } = data;
 
   const kpiCards = [
     {
@@ -149,11 +149,6 @@ export default function DirectorDashboard() {
       value: formatCurrency(kpi.revenue.amount),
       growth: kpi.revenue.growthPct,
       icon: IndianRupee,
-    },
-    {
-      label: "Lead Conversion",
-      value: `${kpi.leadConversion.rate}%`,
-      icon: Target,
     },
     {
       label: "Occupancy",
@@ -193,7 +188,7 @@ export default function DirectorDashboard() {
       </div>
 
       {/* ─── KPI ROW ─── */}
-      <div className="grid grid-cols-2 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
         {kpiCards.map((card, i) => {
           const Icon = card.icon;
           return (
@@ -216,72 +211,6 @@ export default function DirectorDashboard() {
           );
         })}
       </div>
-
-      {/* ─── LEADS CRM OVERVIEW ─── */}
-      {leadCRM && (
-        <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.03), 0 4px 16px rgba(0,0,0,0.03)' }}>
-          <div className="px-6 py-4 border-b border-gray-50 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="icon-badge-sm icon-badge-indigo">
-                <UserPlus size={15} strokeWidth={2} />
-              </div>
-              <h2 className="text-[14px] font-bold text-gray-900 tracking-tight">Leads Pipeline</h2>
-              <span className="text-[11px] font-semibold text-gray-400">{leadCRM.total} total</span>
-            </div>
-            <Link href="/leads" className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
-              View CRM <ChevronRight size={12} />
-            </Link>
-          </div>
-          <div className="p-6">
-            {/* Horizontal Pipeline Funnel */}
-            <div className="flex items-stretch gap-1.5 mb-6">
-              {leadCRM.pipeline.map((stage, i) => {
-                const maxCount = Math.max(...leadCRM.pipeline.map(s => s.count), 1);
-                const isActive = stage.count > 0;
-                // Monochrome blue-slate palette based on index
-                const palette = ["#0f172a", "#1e293b", "#334155", "#475569", "#64748b", "#94a3b8", "#cbd5e1"];
-                const color = palette[i % palette.length];
-                
-                return (
-                  <div key={i} className="flex-1 relative flex flex-col group">
-                    <div className="h-11 flex items-center justify-center relative z-10 transition-all" style={{
-                      backgroundColor: isActive ? color : "#f8fafc",
-                      borderRadius: '12px',
-                      boxShadow: isActive ? 'inset 0 2px 4px rgba(255,255,255,0.1)' : 'none',
-                    }}>
-                      <span className={`text-[13px] font-bold ${isActive ? "text-white" : "text-slate-400"}`}>
-                        {stage.count}
-                      </span>
-                    </div>
-                    <div className="pt-2 text-center">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 block truncate px-1">{stage.stage}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            
-            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-              <div className="flex items-center gap-6">
-                <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Conversion Rate</span>
-                  <div className="text-xl font-black text-emerald-600 leading-none mt-1">{leadCRM.conversionRate}%</div>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Converted</span>
-                  <div className="text-xl font-black text-gray-800 leading-none mt-1">{leadCRM.converted}</div>
-                </div>
-              </div>
-              <Link
-                href="/leads"
-                className="btn-primary text-[12px] !py-2 !px-4"
-              >
-                <UserPlus size={14} /> Add Lead
-              </Link>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ─── SMART INSIGHTS ─── */}
       <SmartInsights />

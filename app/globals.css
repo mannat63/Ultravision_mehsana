@@ -400,6 +400,45 @@
   pointer-events: none;
 }
 
+/* ── Scenic Background Overlay ── */
+.login-left-scenic {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(10,10,10,0.3) 0%, rgba(10,10,10,0.6) 50%, rgba(10,10,10,0.85) 100%),
+    url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%25" stop-color="%23134e7a"/><stop offset="40%25" stop-color="%231e6ea1"/><stop offset="70%25" stop-color="%23f4a940"/><stop offset="100%25" stop-color="%23f59e0b"/></linearGradient><linearGradient id="hill1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%25" stop-color="%23065f46"/><stop offset="100%25" stop-color="%23064e3b"/></linearGradient><linearGradient id="hill2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%25" stop-color="%23047857"/><stop offset="100%25" stop-color="%23065f46"/></linearGradient></defs><rect fill="url(%23sky)" width="1200" height="800"/><circle cx="900" cy="200" r="60" fill="%23fbbf24" opacity="0.8"/><circle cx="900" cy="200" r="80" fill="%23fbbf24" opacity="0.15"/><ellipse cx="600" cy="550" rx="800" ry="200" fill="url(%23hill1)" opacity="0.7"/><ellipse cx="400" cy="600" rx="700" ry="180" fill="url(%23hill2)" opacity="0.6"/><ellipse cx="800" cy="650" rx="600" ry="150" fill="%23064e3b" opacity="0.8"/></svg>');
+  background-size: cover;
+  background-position: center;
+  opacity: 0.4;
+}
+
+/* ── Logo Showcase (replaces avatar rotation) ── */
+.login-logo-showcase {
+  width: 120px;
+  height: 120px;
+  border-radius: 28px;
+  overflow: hidden;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 32px rgba(251, 191, 36, 0.2), 0 0 0 1px rgba(255,255,255,0.1);
+  animation: loginLogoFloat 4s ease-in-out infinite;
+}
+
+.login-showcase-logo {
+  width: 90%;
+  height: 90%;
+  object-fit: contain;
+}
+
+@keyframes loginLogoFloat {
+  0%, 100% { transform: translateY(0); box-shadow: 0 8px 32px rgba(251, 191, 36, 0.2), 0 0 0 1px rgba(255,255,255,0.1); }
+  50% { transform: translateY(-8px); box-shadow: 0 16px 48px rgba(251, 191, 36, 0.3), 0 0 0 1px rgba(255,255,255,0.15); }
+}
+
 /* ── Left Panel Brand ── */
 .login-left-brand {
   position: absolute;
@@ -1006,14 +1045,10 @@
     margin-bottom: 20px;
   }
 
-  .login-avatar-ring {
-    width: 110px;
-    height: 110px;
-  }
-
-  .login-avatar-inner {
-    width: 94px;
-    height: 94px;
+  .login-logo-showcase {
+    width: 90px;
+    height: 90px;
+    border-radius: 22px;
   }
 
   .login-role-name {
@@ -1072,8 +1107,7 @@
 @media (max-width: 400px) {
   .login-right { padding: 20px 16px 24px; }
   .login-card { padding: 24px 18px 22px; border-radius: 20px; }
-  .login-avatar-ring { width: 90px; height: 90px; }
-  .login-avatar-inner { width: 78px; height: 78px; }
+  .login-logo-showcase { width: 76px; height: 76px; border-radius: 18px; }
   .login-role-name { font-size: 18px; }
   .login-hero-title { font-size: 28px; }
 }
@@ -1088,6 +1122,77 @@
 
 @media (min-width: 1201px) and (max-width: 1440px) {
   .login-hero-title { font-size: 42px; }
+}
+
+/* ─── Mobile Responsiveness ─── */
+@media (max-width: 640px) {
+  .page-title {
+    font-size: 1.5rem;
+  }
+
+  .modal-panel {
+    max-width: 100%;
+    margin: 8px;
+    border-radius: 20px;
+  }
+
+  .modal-body .grid-cols-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-header {
+    padding: 12px 16px;
+  }
+
+  .modal-body {
+    padding: 16px;
+  }
+
+  .modal-footer {
+    padding: 12px 16px;
+  }
+
+  .card {
+    border-radius: 20px;
+    padding: 16px;
+  }
+
+  .stat-card {
+    border-radius: 20px;
+    padding: 14px;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .toast-container {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+  }
+
+  .toast {
+    font-size: 13px;
+  }
+
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  .input-field {
+    font-size: 16px;
+  }
+}
+
+/* ─── Mobile bottom bar safe area ─── */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* ─── Print Styles ─── */

@@ -29,7 +29,7 @@ export default function TeacherProfilePage() {
         <div className="w-16 h-16 rounded-2xl animate-shimmer" />
         <div className="space-y-2 flex-1"><div className="h-5 w-40 animate-shimmer rounded" /><div className="h-3 w-28 animate-shimmer rounded" /></div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {[1, 2].map(i => <div key={i} className="card !p-5 h-24 animate-shimmer" />)}
       </div>
     </div>

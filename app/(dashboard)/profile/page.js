@@ -126,7 +126,7 @@ export default function ProfilePage() {
       {/* Role-specific quick links */}
       <div className="card !p-5">
         <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Quick Actions</h3>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {role === "ADMIN" && <>
             <a href="/students" className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 text-sm font-semibold text-gray-700 transition-colors"><User size={14} className="text-indigo-500" /> Students</a>
             <a href="/teachers" className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 text-sm font-semibold text-gray-700 transition-colors"><GraduationCap size={14} className="text-teal-500" /> Teachers</a>

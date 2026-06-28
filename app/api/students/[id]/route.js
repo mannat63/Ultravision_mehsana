@@ -108,6 +108,21 @@ export async function PUT(req, { params }) {
     const { id } = await params;
     const { name, phoneOrEmail, section_id, parent_name, parent_phone, admission_date } = await req.json();
 
+    if (phoneOrEmail) {
+      const trimmed = phoneOrEmail.trim();
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+      const isPhone = /^\+91\s?\d{10}$/.test(trimmed);
+      if (!isEmail && !isPhone) {
+        return NextResponse.json({ error: "Please enter a valid email address or a 10-digit phone number with +91 prefix" }, { status: 400 });
+      }
+    }
+
+    if (parent_phone && parent_phone.trim() !== "+91" && parent_phone.trim() !== "+91 ") {
+      if (!/^\+91\s?\d{10}$/.test(parent_phone.trim())) {
+        return NextResponse.json({ error: "Parent phone must be exactly 10 digits with +91 prefix (e.g., +91 9876543210)" }, { status: 400 });
+      }
+    }
+
     const student = await Student.findById(id);
     if (!student) return NextResponse.json({ error: "Student not found" }, { status: 404 });
 

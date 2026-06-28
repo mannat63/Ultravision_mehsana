@@ -1,12 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, GraduationCap, BookOpen, Layers, IndianRupee, CalendarCheck, Calendar, FileText, Settings, PieChart, ChevronRight, HelpCircle, Bell, UserPlus, Trash2 } from "lucide-react";
+import { LayoutDashboard, Users, GraduationCap, BookOpen, Layers, IndianRupee, CalendarCheck, Calendar, FileText, Settings, PieChart, ChevronRight, HelpCircle, Trash2, MoreHorizontal, X } from "lucide-react";
 
 const adminLinks = [
   { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard, badge: "icon-badge-orange" },
-  { href: "/leads", label: "Leads & CRM", Icon: UserPlus, badge: "icon-badge-pink" },
   { href: "/students", label: "Students", Icon: Users, badge: "icon-badge-blue" },
   { href: "/teachers", label: "Teachers", Icon: GraduationCap, badge: "icon-badge-purple" },
   { href: "/subjects", label: "Courses & Subjects", Icon: BookOpen, badge: "icon-badge-amber" },
@@ -46,17 +46,22 @@ const roleLinksMap = {
   STUDENT: studentLinks,
 };
 
-export default function Sidebar({ role, userName, onClose, onOpenNotification }) {
-  const pathname = usePathname();
-  const links = roleLinksMap[role] || studentLinks;
+// Pick the 4 most important links for bottom bar per role
+const mobileBottomLinks = {
+  ADMIN: ["/dashboard", "/students", "/attendance", "/fees"],
+  TEACHER: ["/dashboard", "/attendance", "/homework", "/tests"],
+  STUDENT: ["/dashboard", "/attendance", "/homework", "/tests"],
+};
 
+/* ─── Desktop Sidebar (hidden on mobile) ─── */
+function DesktopSidebar({ role, userName, links, pathname, onOpenNotification }) {
   return (
-    <aside 
-      className="group bg-white flex flex-col m-4 rounded-[32px] transition-all duration-300 ease-in-out border border-white/50 z-50 print:hidden overflow-hidden" 
-      style={{ 
-        width: '80px', 
-        height: 'calc(100vh - 32px)', 
-        boxShadow: '0 10px 40px rgba(0,0,0,0.08), 0 2px 10px rgba(0,0,0,0.03)' 
+    <aside
+      className="group bg-white hidden md:flex flex-col m-4 rounded-[32px] transition-all duration-300 ease-in-out border border-white/50 z-50 print:hidden overflow-hidden"
+      style={{
+        width: '80px',
+        height: 'calc(100vh - 32px)',
+        boxShadow: '0 10px 40px rgba(0,0,0,0.08), 0 2px 10px rgba(0,0,0,0.03)'
       }}
       onMouseEnter={(e) => e.currentTarget.style.width = '240px'}
       onMouseLeave={(e) => e.currentTarget.style.width = '80px'}
@@ -64,11 +69,11 @@ export default function Sidebar({ role, userName, onClose, onOpenNotification })
       {/* Brand */}
       <div className="py-6 flex-shrink-0 flex items-center px-[16px]">
         <div className="w-12 h-12 rounded-[20px] bg-white flex flex-shrink-0 items-center justify-center overflow-hidden border border-gray-100 shadow-sm">
-          <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
+          <img src="/uv_meh_logo.png" alt="Ultra Vision Academy" className="w-[85%] h-[85%] object-contain" />
         </div>
         <div className="flex-col ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 w-32 overflow-hidden whitespace-nowrap">
-          <span className="block font-extrabold text-gray-900 text-[15px] leading-tight tracking-tight uppercase">Intellogy</span>
-          <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-0.5">Coaching</span>
+          <span className="block font-extrabold text-gray-900 text-[13px] leading-tight tracking-tight uppercase">Ultra Vision</span>
+          <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-0.5">Academy</span>
         </div>
       </div>
 
@@ -77,7 +82,6 @@ export default function Sidebar({ role, userName, onClose, onOpenNotification })
         {links.map((link) => {
           const isActive = pathname === link.href;
           const { Icon } = link;
-          
           return (
             <Link
               key={link.href}
@@ -87,7 +91,6 @@ export default function Sidebar({ role, userName, onClose, onOpenNotification })
                   e.preventDefault();
                   if (onOpenNotification) onOpenNotification();
                 }
-                if (onClose) onClose();
               }}
               className={`flex items-center w-[216px] p-2 rounded-2xl transition-all duration-200 relative ${
                 isActive
@@ -130,7 +133,7 @@ export default function Sidebar({ role, userName, onClose, onOpenNotification })
             </span>
           </a>
         )}
-        
+
         <div className="flex items-center p-2 rounded-2xl bg-gray-50 border border-gray-100 w-[216px]">
           <div className="flex-shrink-0 w-10 h-10 rounded-[16px] bg-gradient-to-br from-gray-800 to-gray-600 flex items-center justify-center text-white text-sm font-bold shadow-sm">
             {(userName || "U")[0].toUpperCase()}
@@ -142,5 +145,127 @@ export default function Sidebar({ role, userName, onClose, onOpenNotification })
         </div>
       </div>
     </aside>
+  );
+}
+
+/* ─── Mobile Bottom Bar + More Sheet (visible only on mobile) ─── */
+function MobileBottomBar({ role, links, pathname, onClose }) {
+  const [showMore, setShowMore] = useState(false);
+  const bottomHrefs = mobileBottomLinks[role] || mobileBottomLinks.STUDENT;
+  const bottomItems = bottomHrefs.map(href => links.find(l => l.href === href)).filter(Boolean);
+  const remainingItems = links.filter(l => !bottomHrefs.includes(l.href));
+
+  return (
+    <>
+      {/* Bottom Navigation Bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-white border-t border-gray-200 print:hidden" style={{ boxShadow: '0 -4px 20px rgba(0,0,0,0.06)' }}>
+        <div className="flex items-center justify-around px-1 py-1.5 safe-area-bottom">
+          {bottomItems.map((link) => {
+            const isActive = pathname === link.href;
+            const { Icon } = link;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => { if (onClose) onClose(); }}
+                className={`flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-all min-w-[56px] ${
+                  isActive
+                    ? "text-gray-900"
+                    : "text-gray-400"
+                }`}
+              >
+                <div className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${isActive ? "bg-gray-900 text-white shadow-sm" : ""}`}>
+                  <Icon size={18} strokeWidth={isActive ? 2.2 : 1.6} />
+                </div>
+                <span className={`text-[9px] font-bold tracking-wide ${isActive ? "text-gray-900" : "text-gray-400"}`}>
+                  {link.label.length > 10 ? link.label.split(" ")[0] : link.label}
+                </span>
+              </Link>
+            );
+          })}
+          {/* More button */}
+          <button
+            onClick={() => setShowMore(true)}
+            className={`flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-all min-w-[56px] ${showMore ? "text-gray-900" : "text-gray-400"}`}
+          >
+            <div className={`w-8 h-8 flex items-center justify-center rounded-xl ${showMore ? "bg-gray-900 text-white shadow-sm" : ""}`}>
+              <MoreHorizontal size={18} strokeWidth={1.6} />
+            </div>
+            <span className="text-[9px] font-bold tracking-wide">More</span>
+          </button>
+        </div>
+      </div>
+
+      {/* More Sheet Overlay */}
+      {showMore && (
+        <div className="fixed inset-0 z-[60] md:hidden" onClick={() => setShowMore(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl overflow-hidden animate-slideUp"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxHeight: '70vh', boxShadow: '0 -10px 40px rgba(0,0,0,0.12)' }}
+          >
+            {/* Sheet Handle */}
+            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-white overflow-hidden border border-gray-100 flex items-center justify-center">
+                  <img src="/uv_meh_logo.png" alt="Ultra Vision" className="w-6 h-6 object-contain" />
+                </div>
+                <span className="text-sm font-bold text-gray-900">All Pages</span>
+              </div>
+              <button onClick={() => setShowMore(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500">
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* All remaining links */}
+            <div className="p-4 grid grid-cols-3 gap-2 overflow-y-auto" style={{ maxHeight: 'calc(70vh - 60px)' }}>
+              {remainingItems.map((link) => {
+                const isActive = pathname === link.href;
+                const { Icon } = link;
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => { setShowMore(false); if (onClose) onClose(); }}
+                    className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-2xl transition-all ${
+                      isActive
+                        ? "bg-gray-900 text-white shadow-md"
+                        : "bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100"
+                    }`}
+                  >
+                    <Icon size={20} strokeWidth={isActive ? 2.2 : 1.6} />
+                    <span className="text-[10px] font-bold text-center leading-tight">{link.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+export default function Sidebar({ role, userName, onClose, onOpenNotification }) {
+  const pathname = usePathname();
+  const links = roleLinksMap[role] || studentLinks;
+
+  return (
+    <>
+      <DesktopSidebar
+        role={role}
+        userName={userName}
+        links={links}
+        pathname={pathname}
+        onOpenNotification={onOpenNotification}
+      />
+      <MobileBottomBar
+        role={role}
+        links={links}
+        pathname={pathname}
+        onClose={onClose}
+      />
+    </>
   );
 }

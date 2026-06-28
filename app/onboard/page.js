@@ -55,12 +55,12 @@ export default function OnboardPage() {
       <div className="max-w-md w-full bg-white rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.06)] border border-gray-200/70 p-8 relative z-10">
         {/* Brand */}
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-md bg-slate-800 text-white flex items-center justify-center font-bold text-sm tracking-wide">
-            IC
+          <div className="w-10 h-10 rounded-md bg-white overflow-hidden flex items-center justify-center border border-gray-200">
+            <img src="/uv_meh_logo.png" alt="Ultra Vision Academy" className="w-full h-full object-contain" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-gray-900 leading-tight">Welcome!</h1>
-            <p className="text-xs text-gray-400 font-medium">Intellogy Coaching Platform</p>
+            <p className="text-xs text-gray-400 font-medium">Ultra Vision Academy, Mehsana</p>
           </div>
         </div>
         

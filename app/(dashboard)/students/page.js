@@ -264,21 +264,50 @@ export default function StudentsPage() {
         {role === "ADMIN" && (
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={async () => {
-              const { doc, startY, addFooter } = await createPdf({ title: "Student Directory", subtitle: `${total} students` });
-              const head = ["#", "Name", "Section", "Parent", "Phone", "Fee Status", "Attendance %", "Avg Score %"];
-              const body = students.map((s, i) => [
-                i + 1,
-                s.user_id?.name || "—",
-                s.section_id ? `${s.section_id.class_id?.name || ""} - ${s.section_id.name || ""}` : "—",
-                s.parent_name || "—",
-                s.user_id?.phoneOrEmail || "—",
-                s.fee_status || "—",
-                s.attendance_percentage != null ? `${Math.round(s.attendance_percentage)}%` : "—",
-                s.performance_avg != null ? `${Math.round(s.performance_avg)}%` : "—",
-              ]);
-              addTable(doc, { startY, head, body });
-              downloadPdf(doc, "students-report.pdf", addFooter);
+              toast("Preparing PDF with all students...");
+              try {
+                const params = new URLSearchParams({ page: 1, limit: 10000 });
+                if (filterSection) params.set("section_id", filterSection);
+                if (riskType) params.set("risk", riskType);
+                const res = await fetch(`/api/students?${params}`, { cache: "no-store" });
+                const allData = await res.json();
+                const allStudents = allData.students || [];
+                const { doc, startY, addFooter } = await createPdf({ title: "Student Directory", subtitle: `${allStudents.length} students` });
+                const head = ["#", "Name", "Section", "Parent", "Phone", "Fee Status", "Attendance %", "Avg Score %"];
+                const body = allStudents.map((s, i) => [
+                  i + 1,
+                  s.user_id?.name || "—",
+                  s.section_id ? `${s.section_id.class_id?.name || ""} - ${s.section_id.name || ""}` : "—",
+                  s.parent_name || "—",
+                  s.user_id?.phoneOrEmail || "—",
+                  s.fee_status || "—",
+                  s.attendance_percentage != null ? `${Math.round(s.attendance_percentage)}%` : "—",
+                  s.performance_avg != null ? `${Math.round(s.performance_avg)}%` : "—",
+                ]);
+                addTable(doc, { startY, head, body });
+                downloadPdf(doc, "students-report.pdf", addFooter);
+                toast("PDF exported successfully!");
+              } catch { toast("Failed to export PDF", "error"); }
             }} className="btn-secondary text-sm"><FileText size={15}/> Export PDF</button>
+            <button onClick={async () => {
+              toast("Preparing CSV with all students...");
+              try {
+                const params = new URLSearchParams({ page: 1, limit: 10000 });
+                if (filterSection) params.set("section_id", filterSection);
+                const res = await fetch(`/api/students?${params}`, { cache: "no-store" });
+                const allData = await res.json();
+                const allStudents = allData.students || [];
+                const header = "Name,Email/Phone,Section,Parent Name,Parent Phone,Fee Status,Total Fee,Paid Fee,Due Fee,Attendance %,Avg Score %\n";
+                const rows = allStudents.map(s =>
+                  `"${s.user_id?.name || ""}","${s.user_id?.phoneOrEmail || ""}","${s.section_id ? `${s.section_id.class_id?.name || ""} - ${s.section_id.name || ""}` : ""}","${s.parent_name || ""}","${s.parent_phone || ""}","${s.fee_status || ""}","${s.total_fee || 0}","${s.paid_fee || 0}","${s.due_fee || 0}","${s.attendance_percentage != null ? s.attendance_percentage.toFixed(1) : ""}","${s.performance_avg != null ? s.performance_avg.toFixed(1) : ""}"`
+                ).join("\n");
+                const blob = new Blob([header + rows], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a"); a.href = url; a.download = `students_${new Date().toISOString().split("T")[0]}.csv`; a.click();
+                URL.revokeObjectURL(url);
+                toast("CSV exported successfully!");
+              } catch { toast("Failed to export CSV", "error"); }
+            }} className="btn-secondary text-sm"><Download size={15}/> Export CSV</button>
             <button onClick={() => setCsvModalOpen(true)} className="btn-secondary text-sm"><Upload size={15}/> Import CSV</button>
             <a href="/sample-students.csv" download className="btn-secondary text-sm"><Download size={15}/> Sample</a>
             <button onClick={openAdd} className="btn-primary"><Plus size={16}/> Add Student</button>
@@ -425,7 +454,7 @@ export default function StudentsPage() {
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Full Name</label>
               <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input-field" placeholder="e.g. Aarav Patel" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Email / Phone</label>
                 <input required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="input-field" placeholder="email or +91..." />
@@ -435,7 +464,7 @@ export default function StudentsPage() {
                 <input type="date" value={form.admission_date} onChange={(e) => setForm({ ...form, admission_date: e.target.value })} className="input-field" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Class</label>
                 <select required value={form.class_id} onChange={(e) => setForm({ ...form, class_id: e.target.value, section_id: "" })} className="input-field">
@@ -451,7 +480,7 @@ export default function StudentsPage() {
                 </select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Parent Name</label>
                 <input required value={form.parent_name} onChange={(e) => setForm({ ...form, parent_name: e.target.value })} className="input-field" placeholder="Parent name" />
@@ -462,7 +491,7 @@ export default function StudentsPage() {
               </div>
             </div>
             {!editingStudent && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Course Fee (₹)</label>
                   <input type="number" required value={form.total_fee} onChange={(e) => setForm({ ...form, total_fee: e.target.value })} className="input-field" placeholder="e.g. 45000" />

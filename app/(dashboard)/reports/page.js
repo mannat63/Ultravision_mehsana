@@ -231,7 +231,7 @@ export default function ReportsPage() {
 
   if (!role) return <div className="p-8 text-gray-500 font-medium">Loading...</div>;
 
-  const SCHOOL_NAME = "Intellogy Coaching";
+  const SCHOOL_NAME = "Ultra Vision Academy, Mehsana";
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -481,7 +481,7 @@ export default function ReportsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center print:bg-gray-100 print:border print:border-gray-300 overflow-hidden">
-                    <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
+                    <img src="/uv_meh_logo.png" alt="Ultra Vision Academy" className="w-full h-full object-contain" />
                   </div>
                   <div>
                     <h1 className="text-xl font-bold tracking-tight print:text-2xl">{SCHOOL_NAME}</h1>

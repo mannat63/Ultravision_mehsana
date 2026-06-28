@@ -2,8 +2,8 @@ import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 
 export const metadata = {
-  title: "Intellogy Coaching | Academic Excellence",
-  description: "A modern management platform for schools. Track students, fees, attendance, and results with ease.",
+  title: "Ultra Vision Academy Mehsana | Academic Excellence",
+  description: "A modern management platform for Ultra Vision Academy Mehsana. Track students, fees, attendance, and results with ease.",
 };
 
 export default function RootLayout({ children }) {

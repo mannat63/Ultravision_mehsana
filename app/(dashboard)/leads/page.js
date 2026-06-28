@@ -121,8 +121,8 @@ function AddLeadModal({ onClose, onAdd, courses = [] }) {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
         </div>
         <form onSubmit={submit} className="px-6 py-5 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Name *</label>
               <input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} className="input-field" placeholder="Lead name" required />
             </div>

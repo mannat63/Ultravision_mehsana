@@ -73,8 +73,12 @@ export async function PUT(req, { params }) {
     const { id } = await params;
     const body = await req.json();
     const { name, email, phone, phoneOrEmail, subjects } = body;
-    if (phone && !/^\+91 \d{10}$/.test(phone)) {
+    if (phone && phone.trim() !== "+91" && phone.trim() !== "+91 " && !/^\+91\s?\d{10}$/.test(phone.trim())) {
       return NextResponse.json({ error: "Phone number must be exactly 10 digits prefixed with +91 (e.g., +91 9876543210)" }, { status: 400 });
+    }
+
+    if (email && email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 });
     }
 
     const finalContact = email?.trim() ? email.trim() : phone?.trim() ? phone.trim() : phoneOrEmail;

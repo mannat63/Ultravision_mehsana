@@ -197,7 +197,7 @@ export default function StudentProfilePage() {
       {/* ─── Attendance ─── */}
       {tab === "Attendance" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="card !p-5 flex items-center gap-4">
               <PctRing pct={attendance?.last30?.pct} size={80} />
               <div>
