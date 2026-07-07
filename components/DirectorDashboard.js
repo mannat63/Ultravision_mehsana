@@ -398,8 +398,8 @@ export default function DirectorDashboard() {
     <div className="max-w-[1400px] mx-auto space-y-6 pb-4">
       {showReportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-gray-100">
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden border border-gray-100 max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center flex-shrink-0">
               <div className="flex items-center gap-2 text-amber-600 font-bold">
                 <BookOpen size={18} /> Director Report
               </div>
@@ -407,20 +407,48 @@ export default function DirectorDashboard() {
                 <XCircle size={20} />
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">From Date</label>
-                <input type="date" value={reportDateFrom} onChange={(e) => setReportDateFrom(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all" />
+            <div className="p-6 space-y-4 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">From Date</label>
+                  <input type="date" value={reportDateFrom} onChange={(e) => setReportDateFrom(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">To Date</label>
+                  <input type="date" value={reportDateTo} onChange={(e) => setReportDateTo(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all" />
+                </div>
               </div>
+
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">To Date</label>
-                <input type="date" value={reportDateTo} onChange={(e) => setReportDateTo(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all" />
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Include In Report</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { key: "metrics", label: "Key Metrics & Top Performer" },
+                    { key: "batches", label: "Batch Summary & Toppers" },
+                    { key: "atRisk", label: "Students At Risk" },
+                    { key: "notes", label: "Director's Notes" },
+                  ].map((s) => (
+                    <label key={s.key} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer text-xs font-semibold transition-colors ${reportSections[s.key] ? "bg-amber-50 border-amber-300 text-amber-800" : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"}`}>
+                      <input type="checkbox" checked={reportSections[s.key]} onChange={() => toggleReportSection(s.key)} className="accent-amber-500 w-4 h-4 flex-shrink-0" />
+                      <span>{s.label}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
+
+              {reportSections.notes && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Custom Notes</label>
+                  <textarea value={reportNotes} onChange={(e) => setReportNotes(e.target.value)} rows={3} placeholder="Add remarks, action items, or commentary to appear in the report…" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all resize-none" />
+                </div>
+              )}
             </div>
-            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex flex-wrap justify-end gap-2 flex-shrink-0">
               <button onClick={() => setShowReportModal(false)} className="btn-secondary">Cancel</button>
+              <button onClick={handlePrintReport} disabled={generatingReport} className="btn-secondary">Print</button>
+              <button onClick={handleExportExcel} disabled={generatingReport} className="btn-secondary !border-emerald-300 !text-emerald-700 hover:!bg-emerald-50">Excel</button>
               <button onClick={handleGenerateReport} disabled={generatingReport} className="btn-primary !bg-amber-500 hover:!bg-amber-600 !border-amber-600 !text-white !shadow-amber-500/20">
-                {generatingReport ? "Generating..." : "Generate PDF"}
+                {generatingReport ? "Working…" : "PDF"}
               </button>
             </div>
           </div>
