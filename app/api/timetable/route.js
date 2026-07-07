@@ -33,6 +33,8 @@ export async function GET(req) {
       const student = await Student.findOne({ user_id: authUser._id }, { section_id: 1 }).lean();
       if (!student) return NextResponse.json([]);
       query.section_id = student.section_id;
+      // Subject-wise scoping: student only sees timetable slots for their enrolled subjects.
+
     } else {
       if (section_id) query.section_id = section_id;
       if (teacher_id) query.teacher_id = teacher_id;

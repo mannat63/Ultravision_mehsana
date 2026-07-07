@@ -19,6 +19,7 @@ export async function GET(req) {
 
     const { searchParams } = new URL(req.url);
     const section_id = searchParams.get("section_id");
+
     const risk       = searchParams.get("risk");
     const search     = searchParams.get("search") || "";
     const page       = Math.max(1, parseInt(searchParams.get("page")  || "1"));
@@ -45,6 +46,7 @@ export async function GET(req) {
     } else {
       if (section_id) query.section_id = section_id;
     }
+
 
     // ── Search: by student name ────────────────────────────────────────
     if (search) {
@@ -127,7 +129,7 @@ export async function GET(req) {
 
     // ── Bulk enrichment ────────────────────────────────────────────────
     const [fees, attendanceStats, performanceStats] = await Promise.all([
-      Fee.find({ student_id: { $in: studentIds } }, { student_id: 1, total_amount: 1, due_amount: 1, paid_amount: 1, status: 1 }).lean(),
+      Fee.find({ student_id: { $in: studentIds } }, { student_id: 1, total_amount: 1, due_amount: 1, paid_amount: 1, status: 1, due_date: 1 }).sort({ due_date: 1 }).lean(),
 
       Attendance.aggregate([
         { $match: { student_id: { $in: studentIds }, date: { $gte: thirtyDaysAgo }, status: { $ne: "NOT_MARKED" } } },
@@ -165,6 +167,7 @@ export async function GET(req) {
       paid_fee:              feeMap[s._id.toString()]?.paid_amount   ?? 0,
       due_fee:               feeMap[s._id.toString()]?.due_amount    ?? 0,
       fee_status:            feeMap[s._id.toString()]?.status        ?? "UNKNOWN",
+      fee_due_date:          feeMap[s._id.toString()]?.due_date      ?? null,
       risk_info:             riskMap[s._id.toString()]               ?? null,
       attendance_percentage: attMap[s._id.toString()]                ?? null,
       performance_avg:       perfMap[s._id.toString()]               ?? null,

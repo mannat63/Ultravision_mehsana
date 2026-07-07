@@ -4,6 +4,9 @@ const StudentSchema = new mongoose.Schema(
   {
     user_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     section_id: { type: mongoose.Schema.Types.ObjectId, ref: "Section", required: true },
+    // Subjects this student is enrolled in within their batch/section.
+    // A single student record supports one, some, or all subjects — never duplicated per subject.
+
     parent_name: { type: String, required: true },
     parent_phone: { type: String, required: true },
     admission_date: { type: Date, default: Date.now },

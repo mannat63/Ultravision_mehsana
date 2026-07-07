@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { Users, Upload, Plus, X, Download, Pencil, Trash2, CheckCircle, AlertCircle, Search, BarChart3, Activity, ChevronLeft, ChevronRight, Eye, Filter, FileText } from "lucide-react";
 import Link from "next/link";
 import { createPdf, addTable, downloadPdf } from "@/lib/exportPdf";
+import * as XLSX from "xlsx";
 
 function Toast({ toasts }) {
   if (!toasts.length) return null;
@@ -71,6 +72,7 @@ export default function StudentsPage() {
   const [data, setData] = useState({ students: [], total: 0, page: 1, pages: 1 });
   const [sections, setSections] = useState([]);
   const [classes, setClasses] = useState([]);
+  const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState("");
 
@@ -90,9 +92,12 @@ export default function StudentsPage() {
   const [csvModalOpen, setCsvModalOpen] = useState(false);
   const [dragActive, setDragActive]     = useState(false);
   const [csvFile, setCsvFile]           = useState(null);
-  const [csvPreviewRows, setCsvPreviewRows] = useState(null);
+  const [parsedData, setParsedData]     = useState(null);
+  const [fileHeaders, setFileHeaders]   = useState([]);
+  const [mappingState, setMappingState] = useState('upload'); // 'upload' | 'mapping' | 'submitting'
+  const [fieldMapping, setFieldMapping] = useState({});
+  const [mappingLoading, setMappingLoading] = useState(false);
   const [csvResult, setCsvResult]       = useState(null);
-  const [csvUploading, setCsvUploading] = useState(false);
   const fileRef = useRef(null);
 
   const [toasts, setToasts] = useState([]);
@@ -118,10 +123,12 @@ export default function StudentsPage() {
     Promise.all([
       fetch("/api/sections").then(r => r.json()),
       fetch("/api/classes").then(r => r.json()),
+      fetch("/api/subjects").then(r => r.json()),
       fetch("/api/me").then(r => r.json()),
-    ]).then(([s, c, m]) => {
+    ]).then(([s, c, subs, m]) => {
       setSections(Array.isArray(s) ? s : []);
       setClasses(Array.isArray(c) ? c : []);
+      setSubjects(Array.isArray(subs) ? subs : []);
       setRole(m?.role || "STUDENT");
     });
   }, []);
@@ -165,11 +172,12 @@ export default function StudentsPage() {
       student_phone: "+91 ",
       class_id: sec?.class_id?._id || sec?.class_id || "",
       section_id: s.section_id?._id || s.section_id || "",
+
       parent_name: s.parent_name || "",
       parent_phone: s.parent_phone || "+91 ",
       admission_date: s.admission_date ? new Date(s.admission_date).toLocaleDateString("en-CA") : "",
-      total_fee: "",
-      due_date: "",
+      total_fee: s.total_fee ? String(s.total_fee) : "",
+      due_date: s.fee_due_date ? new Date(s.fee_due_date).toLocaleDateString("en-CA") : "",
     });
     setModalOpen(true);
   }
@@ -215,25 +223,106 @@ export default function StudentsPage() {
     if (e.dataTransfer.files?.[0]) processFile(e.dataTransfer.files[0]);
   }
   function handleFileSelect(e) { if (e.target.files?.[0]) processFile(e.target.files[0]); }
-  function processFile(file) {
-    if (!file.name.endsWith(".csv")) return toast("Upload a .csv file", "error");
+  
+  async function processFile(file) {
+    const isCsv = file.name.endsWith(".csv");
+    const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
+    
+    if (!isCsv && !isExcel) return toast("Upload a .csv or .xlsx file", "error");
     setCsvFile(file);
+    
     const reader = new FileReader();
-    reader.onload = (evt) => { const rows = evt.target.result.split("\n").filter(r => r.trim()); setCsvPreviewRows(rows.length > 1 ? rows.length - 1 : 0); };
-    reader.readAsText(file);
+    reader.onload = async (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const firstSheet = workbook.SheetNames[0];
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { header: 1, defval: "" });
+        
+        if (rows.length < 2) return toast("File must contain at least a header and one row", "error");
+        
+        const headers = rows[0].map(h => String(h).trim()).filter(Boolean);
+        const sampleRow = rows[1];
+        
+        const objectData = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { defval: "" });
+        setParsedData(objectData);
+        setFileHeaders(headers);
+        setMappingState('mapping');
+        setMappingLoading(true);
+
+        const res = await fetch("/api/students/import/map-columns", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ headers, sampleRow })
+        });
+        
+        if (res.ok) {
+           const mapData = await res.json();
+           if (mapData.mappings) {
+             setFieldMapping(mapData.mappings);
+           }
+        } else {
+           toast("Could not auto-map columns, please map manually.", "error");
+           setFieldMapping({ name: "", parent_phone: "", class_name: "", section_name: "", admission_date: "", total_fee: "" });
+        }
+      } catch (err) {
+        toast("Failed to parse file", "error");
+        resetImportState();
+      } finally {
+        setMappingLoading(false);
+      }
+    };
+    reader.readAsArrayBuffer(file);
   }
+
   async function handleConfirmCSV() {
-    if (!csvFile) return;
-    setCsvUploading(true); setCsvResult(null);
-    const fd = new FormData(); fd.append("file", csvFile);
+    if (!parsedData || !fieldMapping.name || !fieldMapping.parent_phone || !fieldMapping.class_name || !fieldMapping.section_name) {
+      return toast("Please map all required fields", "error");
+    }
+    setMappingState('submitting');
+    setCsvResult(null);
+
+    const mappedStudents = parsedData.map(row => {
+      return {
+        name: row[fieldMapping.name] || "",
+        parent_phone: row[fieldMapping.parent_phone] || "",
+        class_name: row[fieldMapping.class_name] || "",
+        section_name: row[fieldMapping.section_name] || "",
+        admission_date: fieldMapping.admission_date ? row[fieldMapping.admission_date] : null,
+        total_fee: fieldMapping.total_fee ? row[fieldMapping.total_fee] : null,
+      };
+    });
+
     try {
-      const res  = await fetch("/api/students/import", { method: "POST", body: fd });
+      const res = await fetch("/api/students/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ students: mappedStudents })
+      });
       const data = await res.json();
       setCsvResult(data);
-      if (res.ok) { toast(`Imported ${data.imported || 0} students!`); setCsvModalOpen(false); setCsvFile(null); setCsvPreviewRows(null); fetchStudents(); }
-      else toast("Import had errors", "error");
-    } catch (err) { setCsvResult({ error: err.message }); toast("CSV import failed", "error"); }
-    setCsvUploading(false);
+      if (res.ok) { 
+        toast(`Imported ${data.imported || 0} students!`); 
+        setCsvModalOpen(false); 
+        resetImportState(); 
+        fetchStudents(); 
+      } else { 
+        toast("Import had errors", "error"); 
+      }
+    } catch (err) { 
+      setCsvResult({ error: err.message }); 
+      toast("Import failed", "error"); 
+    } finally {
+      if (mappingState === 'submitting') setMappingState('mapping'); // back to mapping on error
+    }
+  }
+
+  function resetImportState() {
+    setCsvFile(null);
+    setParsedData(null);
+    setFileHeaders([]);
+    setMappingState('upload');
+    setFieldMapping({});
   }
 
   const { students, total, pages } = data;
@@ -308,7 +397,7 @@ export default function StudentsPage() {
                 toast("CSV exported successfully!");
               } catch { toast("Failed to export CSV", "error"); }
             }} className="btn-secondary text-sm"><Download size={15}/> Export CSV</button>
-            <button onClick={() => setCsvModalOpen(true)} className="btn-secondary text-sm"><Upload size={15}/> Import CSV</button>
+            <button onClick={() => { resetImportState(); setCsvModalOpen(true); }} className="btn-secondary text-sm"><Upload size={15}/> Bulk Import</button>
             <a href="/sample-students.csv" download className="btn-secondary text-sm"><Download size={15}/> Sample</a>
             <button onClick={openAdd} className="btn-primary"><Plus size={16}/> Add Student</button>
           </div>
@@ -387,6 +476,7 @@ export default function StudentsPage() {
 
                 {/* Section / class */}
                 <div className="text-xs text-gray-500">{section}</div>
+
 
                 {/* Stats row */}
                 <div className="flex items-center gap-4 pt-2 border-t border-gray-100">
@@ -480,6 +570,8 @@ export default function StudentsPage() {
                 </select>
               </div>
             </div>
+
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Parent Name</label>
@@ -490,18 +582,21 @@ export default function StudentsPage() {
                 <input required value={form.parent_phone} onChange={(e) => setForm({ ...form, parent_phone: e.target.value })} className="input-field" placeholder="+91 98765..." />
               </div>
             </div>
-            {!editingStudent && (
+            <div>
+              {editingStudent && (
+                <p className="text-[11px] text-gray-400 mb-1.5">Editing updates this student's latest fee cycle. Leave amount unchanged to keep it as-is.</p>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Course Fee (₹)</label>
-                  <input type="number" required value={form.total_fee} onChange={(e) => setForm({ ...form, total_fee: e.target.value })} className="input-field" placeholder="e.g. 45000" />
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">{editingStudent ? "Fee Amount (₹)" : "Course Fee (₹)"}</label>
+                  <input type="number" required={!editingStudent} value={form.total_fee} onChange={(e) => setForm({ ...form, total_fee: e.target.value })} className="input-field" placeholder="e.g. 45000" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Fee Due Date</label>
-                  <input type="date" required value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="input-field" />
+                  <input type="date" required={!editingStudent} value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="input-field" />
                 </div>
               </div>
-            )}
+            </div>
           </div>
           <div className="modal-footer">
             <button type="button" onClick={() => { setModalOpen(false); setEditingStudent(null); }} className="btn-secondary" disabled={submitting}>Cancel</button>
@@ -510,34 +605,90 @@ export default function StudentsPage() {
         </form>
       </Modal>
 
-      {/* CSV Import Modal */}
-      <Modal open={csvModalOpen} onClose={() => { setCsvModalOpen(false); setCsvFile(null); setCsvPreviewRows(null); }} title="Import Students (CSV)">
+      {/* Bulk Import Modal */}
+      <Modal open={csvModalOpen} onClose={() => { setCsvModalOpen(false); resetImportState(); }} title="Bulk Import Students">
         <div className="modal-body space-y-4">
-          <div className="bg-gray-50 text-gray-600 text-sm p-3.5 rounded-lg border border-gray-200">
-            <p className="font-semibold text-gray-800 mb-1">Required Headers:</p>
-            <code className="bg-white px-2.5 py-1 rounded-md text-slate-700 text-xs border border-gray-200 font-mono">name, parent_phone, section_name, admission_date</code>
-          </div>
-          <div className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${dragActive ? "border-slate-400 bg-slate-50" : "border-gray-200 bg-white hover:bg-gray-50"} ${csvFile ? "border-emerald-400 bg-emerald-50" : ""}`} onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}>
-            {csvFile ? (
-              <div className="flex flex-col items-center">
-                <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600 mb-3"><CheckCircle size={22} /></div>
-                <h3 className="font-semibold text-gray-800 text-sm">{csvFile.name}</h3>
-                <p className="text-sm text-gray-500 mt-1">{csvPreviewRows} row(s) found</p>
-                <button onClick={() => { setCsvFile(null); setCsvPreviewRows(null); }} className="text-red-500 text-xs font-semibold mt-4 underline">Remove</button>
+          {mappingState === 'upload' && (
+            <>
+              <div className="bg-gray-50 text-gray-600 text-sm p-3.5 rounded-lg border border-gray-200">
+                <p className="font-semibold text-gray-800 mb-1">Required Columns:</p>
+                <code className="bg-white px-2.5 py-1 rounded-md text-slate-700 text-xs border border-gray-200 font-mono inline-block mb-2">Student Name, Parent Phone, Class Name, Section Name</code>
+                <p className="font-semibold text-gray-800 mb-1 mt-2">Optional Columns:</p>
+                <code className="bg-white px-2.5 py-1 rounded-md text-slate-700 text-xs border border-gray-200 font-mono inline-block">Admission Date, Total Fee</code>
+                <p className="mt-2 text-xs opacity-80 italic">Don't worry about exact column names. Our AI will map them automatically!</p>
               </div>
-            ) : (
-              <label className="flex flex-col items-center cursor-pointer">
-                <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-500 mb-3"><Upload size={22} /></div>
-                <h3 className="font-semibold text-gray-700 text-sm">Drag & Drop CSV</h3>
-                <p className="text-sm text-gray-500 mt-1">or click to browse</p>
-                <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileSelect} />
-              </label>
-            )}
-          </div>
+              <div className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${dragActive ? "border-slate-400 bg-slate-50" : "border-gray-200 bg-white hover:bg-gray-50"} ${csvFile ? "border-emerald-400 bg-emerald-50" : ""}`} onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}>
+                <label className="flex flex-col items-center cursor-pointer">
+                  <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-500 mb-3"><Upload size={22} /></div>
+                  <h3 className="font-semibold text-gray-700 text-sm">Drag & Drop CSV/Excel</h3>
+                  <p className="text-sm text-gray-500 mt-1">or click to browse</p>
+                  <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileSelect} />
+                </label>
+              </div>
+            </>
+          )}
+
+          {mappingState === 'mapping' && (
+            <>
+              {mappingLoading ? (
+                <div className="py-12 flex flex-col items-center justify-center text-center">
+                  <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
+                  <h3 className="font-bold text-gray-800">AI is mapping your columns...</h3>
+                  <p className="text-xs text-gray-500 mt-1">Please wait a moment.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-emerald-50 text-emerald-800 text-sm p-3.5 rounded-lg border border-emerald-200 flex items-start gap-2">
+                    <CheckCircle size={18} className="shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">File Parsed: {csvFile?.name}</p>
+                      <p className="text-xs mt-1">We found {parsedData?.length || 0} rows. Please confirm or edit the column mappings below.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 max-h-[40vh] overflow-y-auto px-1">
+                    {[
+                      { key: "name", label: "Student Name", req: true },
+                      { key: "parent_phone", label: "Parent Phone/Email", req: true },
+                      { key: "class_name", label: "Class Name", req: true },
+                      { key: "section_name", label: "Section Name", req: true },
+                      { key: "admission_date", label: "Admission Date", req: false },
+                      { key: "total_fee", label: "Total Fee", req: false },
+                    ].map(field => (
+                      <div key={field.key} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 p-3 border border-gray-100 rounded-lg bg-gray-50">
+                        <div className="flex-1">
+                          <span className="text-xs font-bold text-gray-700 block">{field.label} {field.req && <span className="text-red-500">*</span>}</span>
+                          <span className="text-[10px] text-gray-400">Database field</span>
+                        </div>
+                        <div className="flex-1">
+                          <select 
+                            value={fieldMapping[field.key] || ""} 
+                            onChange={e => setFieldMapping({...fieldMapping, [field.key]: e.target.value})}
+                            className="input-field !py-1.5 text-sm"
+                          >
+                            <option value="">-- Ignore / Not Present --</option>
+                            {fileHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
         </div>
         <div className="modal-footer">
-          <button onClick={() => { setCsvModalOpen(false); setCsvFile(null); }} className="btn-secondary" disabled={csvUploading}>Cancel</button>
-          <button onClick={handleConfirmCSV} className={`btn-primary ${!csvFile ? "opacity-50 cursor-not-allowed" : ""}`} disabled={!csvFile || csvUploading}>{csvUploading ? "Importing…" : "Confirm & Import"}</button>
+          <button onClick={() => { setCsvModalOpen(false); resetImportState(); }} className="btn-secondary" disabled={mappingState === 'submitting'}>Cancel</button>
+          
+          {mappingState === 'mapping' && !mappingLoading && (
+            <button onClick={handleConfirmCSV} className="btn-primary">Confirm & Import</button>
+          )}
+          
+          {mappingState === 'submitting' && (
+            <button className="btn-primary opacity-50 cursor-not-allowed" disabled>Importing...</button>
+          )}
         </div>
       </Modal>
 

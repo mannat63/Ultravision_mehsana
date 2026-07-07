@@ -347,6 +347,23 @@ export default function DashboardPage() {
           </span>
         </div>
 
+        {/* Enrolled Subjects */}
+        <div className="bg-white border border-gray-100 rounded-2xl px-4 sm:px-5 py-4" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.03), 0 4px 16px rgba(0,0,0,0.03)' }}>
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="icon-badge-sm icon-badge-purple"><BookOpen size={14} /></div>
+            <h2 className="text-[13px] font-bold text-gray-900">My Subjects</h2>
+          </div>
+          {stats.enrolledSubjects?.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {stats.enrolledSubjects.map((name, i) => (
+                <span key={i} className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg">{name}</span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">No subjects assigned yet. Please contact the academy office.</p>
+          )}
+        </div>
+
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[

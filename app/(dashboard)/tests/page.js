@@ -11,6 +11,7 @@ const defaultSubjects = [
   { name: "Maths", max_marks: 100 }
 ];
 
+
 export default function TestsPage() {
   const [tests, setTests] = useState([]);
   const [sections, setSections] = useState([]);
@@ -152,7 +153,9 @@ export default function TestsPage() {
       fetch(`/api/students?section_id=${test.section_id?._id || test.section_id}&limit=200`).then((r) => r.json()),
     ]);
     setResults(Array.isArray(r) ? r : []);
-    setStudents(Array.isArray(s) ? s : (s?.students || []));
+
+    const roster = Array.isArray(s) ? s : (s?.students || []);
+    setStudents(roster);
     setModalPage(1);
 
     const marks = {};
@@ -685,8 +688,9 @@ export default function TestsPage() {
                   </thead>
                   <tbody>
                     {paginatedStudents.map((s) => {
-                      const totalScored = selectedTest.subjects?.reduce((sum, sub) => sum + Number(markForm[s._id]?.[sub.name] || 0), 0) || 0;
-                      const overallMax = selectedTest.subjects?.reduce((sum, sub) => sum + (sub.max_marks || 0), 0) || 0;
+                      const enrolledSubs = selectedTest.subjects || [];
+                      const totalScored = enrolledSubs.reduce((sum, sub) => sum + Number(markForm[s._id]?.[sub.name] || 0), 0);
+                      const overallMax = enrolledSubs.reduce((sum, sub) => sum + (sub.max_marks || 0), 0);
 
                       return (
                         <tr key={s._id}>
@@ -696,19 +700,19 @@ export default function TestsPage() {
                           {selectedTest.subjects?.map((sub, idx) => (
                              <td key={idx} className="text-center bg-white">
                               <div className="flex items-center justify-center">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={markForm[s._id]?.[sub.name] ?? ""}
-                                  onChange={(e) =>
-                                    setMarkForm({ 
-                                      ...markForm, 
-                                      [s._id]: { ...(markForm[s._id] || {}), [sub.name]: e.target.value } 
-                                    })
-                                  }
-                                  className="w-16 px-2 py-1 text-center border border-gray-300 rounded-md text-sm font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 transition-all font-mono shadow-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                  placeholder="—"
-                                />
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={markForm[s._id]?.[sub.name] ?? ""}
+                                    onChange={(e) =>
+                                      setMarkForm({
+                                        ...markForm,
+                                        [s._id]: { ...(markForm[s._id] || {}), [sub.name]: e.target.value }
+                                      })
+                                    }
+                                    className="w-16 px-2 py-1 text-center border border-gray-300 rounded-md text-sm font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 transition-all font-mono shadow-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                    placeholder="—"
+                                  />
                               </div>
                             </td>
                           ))}

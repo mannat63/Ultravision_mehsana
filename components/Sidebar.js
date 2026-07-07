@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, GraduationCap, BookOpen, Layers, IndianRupee, CalendarCheck, Calendar, FileText, Settings, PieChart, ChevronRight, HelpCircle, Trash2, MoreHorizontal, X } from "lucide-react";
+import { LayoutDashboard, Users, GraduationCap, BookOpen, Layers, IndianRupee, CalendarCheck, Calendar, FileText, Settings, PieChart, ChevronRight, HelpCircle, Trash2, MoreHorizontal, X, Lock, Target } from "lucide-react";
 
 const adminLinks = [
   { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard, badge: "icon-badge-orange" },
@@ -16,6 +16,7 @@ const adminLinks = [
   { href: "/attendance", label: "Attendance", Icon: CalendarCheck, badge: "icon-badge-blue" },
   { href: "/tests", label: "Tests & Results", Icon: FileText, badge: "icon-badge-purple" },
   { href: "/reports", label: "Reports", Icon: PieChart, badge: "icon-badge-orange" },
+  { href: "/leads", label: "Leads & CRM", Icon: Target, badge: "icon-badge-amber", locked: true },
   { href: "/recycle-bin", label: "Recycle Bin", Icon: Trash2, badge: "icon-badge-red" },
   { href: "/automation", label: "Settings", Icon: Settings, badge: "icon-badge-slate" },
 ];
@@ -81,7 +82,33 @@ function DesktopSidebar({ role, userName, links, pathname, onOpenNotification })
       <nav className="flex-1 py-2 flex flex-col gap-2 overflow-y-auto overflow-x-hidden no-scrollbar w-full px-[12px]">
         {links.map((link) => {
           const isActive = pathname === link.href;
-          const { Icon } = link;
+          const { Icon, locked } = link;
+          
+          if (locked) {
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="flex items-center w-[216px] p-2 rounded-2xl transition-all duration-200 relative text-gray-400 hover:bg-gray-50 group/locked"
+                title={link.label}
+              >
+                <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-xl opacity-60">
+                  <Icon size={20} strokeWidth={1.8} />
+                </div>
+                <span className="ml-3 font-medium text-[13px] opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap flex-1 pr-[80px] truncate">
+                  {link.label}
+                </span>
+
+                {/* Premium badge */}
+                <div className="absolute right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center">
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-md border border-amber-200 shadow-sm whitespace-nowrap">
+                    <Lock size={10} className="text-amber-500" /> Premium
+                  </span>
+                </div>
+              </Link>
+            );
+          }
+
           return (
             <Link
               key={link.href}
@@ -222,7 +249,25 @@ function MobileBottomBar({ role, links, pathname, onClose }) {
             <div className="p-4 grid grid-cols-3 gap-2 overflow-y-auto" style={{ maxHeight: 'calc(70vh - 60px)' }}>
               {remainingItems.map((link) => {
                 const isActive = pathname === link.href;
-                const { Icon } = link;
+                const { Icon, locked } = link;
+                
+                if (locked) {
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      onClick={() => { setShowMore(false); if (onClose) onClose(); }}
+                      className="flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl transition-all bg-gray-50/50 border border-gray-100/50 text-gray-400 relative"
+                    >
+                      <Icon size={20} strokeWidth={1.6} className="opacity-60" />
+                      <span className="text-[10px] font-bold text-center leading-tight opacity-60">{link.label}</span>
+                      <span className="absolute top-1 right-1 flex items-center gap-0.5 text-[8px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                        <Lock size={8} /> PRO
+                      </span>
+                    </Link>
+                  );
+                }
+
                 return (
                   <Link
                     key={link.href}

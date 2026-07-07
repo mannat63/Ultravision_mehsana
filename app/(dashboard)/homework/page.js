@@ -16,6 +16,7 @@ export default function HomeworkPage() {
 
   // --- TEACHER MODAL STATE ---
   const [sections, setSections] = useState([]);
+  const [subjects, setSubjects] = useState([]);
   const [formData, setFormData] = useState({ title: "", description: "", subject: "", due_date: "", section_id: "", drive_link: "" });
   const [instituteDriveLink, setInstituteDriveLink] = useState("");
   const [hwSubmissions, setHwSubmissions] = useState([]);
@@ -47,11 +48,13 @@ export default function HomeworkPage() {
   }
 
   async function fetchSections() {
-    const [secRes, settingsRes] = await Promise.all([
+    const [secRes, settingsRes, subRes] = await Promise.all([
       fetch("/api/sections"),
-      fetch("/api/settings")
+      fetch("/api/settings"),
+      fetch("/api/subjects"),
     ]);
     if (secRes.ok) setSections(await secRes.json());
+    if (subRes.ok) { const sj = await subRes.json(); setSubjects(Array.isArray(sj) ? sj : []); }
     if (settingsRes.ok) {
       const s = await settingsRes.json();
       setInstituteDriveLink(s.google_drive_link || "");
@@ -466,7 +469,10 @@ export default function HomeworkPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Subject</label>
-                    <input required type="text" value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Physics" />
+                    <select required value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+                      <option value="">Select subject…</option>
+                      {subjects.map(sub => <option key={sub._id} value={sub.name}>{sub.name}</option>)}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Due Date</label>

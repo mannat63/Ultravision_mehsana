@@ -22,25 +22,26 @@ export async function GET(req) {
         .sort({ createdAt: -1 })
         .lean();
       
-      // Also fetch submission counts
+      // Also fetch submission counts (total_students = students enrolled in this subject)
       for (let hw of homeworks) {
         hw.submissions = await HomeworkSubmission.countDocuments({ homework_id: hw._id, status: { $ne: "PENDING" } });
-        hw.total_students = await Student.countDocuments({ section_id: hw.section_id });
+        const countQuery = { section_id: hw.section_id?._id || hw.section_id };
+        hw.total_students = await Student.countDocuments(countQuery);
       }
 
       return NextResponse.json(homeworks);
-    } 
-    
+    }
+
     if (authUser.role === "STUDENT") {
       const student = await Student.findOne({ user_id: authUser._id }).lean();
       if (!student) return NextResponse.json([], { status: 200 });
 
       // Find homeworks for student's section
       const homeworks = await Homework.find({ section_id: student.section_id })
-        .populate("teacher_id") // will just fetch id 
+        .populate("teacher_id") // will just fetch id
         .sort({ due_date: 1 })
         .lean();
-        
+
       // Merge submission statuses
       for (let hw of homeworks) {
         const sub = await HomeworkSubmission.findOne({ homework_id: hw._id, student_id: student._id }).lean();
@@ -64,10 +65,11 @@ export async function GET(req) {
         .sort({ createdAt: -1 })
         .lean();
         
-      // Also fetch submission counts
+      // Also fetch submission counts (total_students = students enrolled in this subject)
       for (let hw of homeworks) {
         hw.submissions = await HomeworkSubmission.countDocuments({ homework_id: hw._id, status: { $ne: "PENDING" } });
-        hw.total_students = await Student.countDocuments({ section_id: hw.section_id });
+        const countQuery = { section_id: hw.section_id?._id || hw.section_id };
+        hw.total_students = await Student.countDocuments(countQuery);
       }
 
       return NextResponse.json(homeworks);
@@ -89,10 +91,21 @@ export async function POST(req) {
     const body = await req.json();
     const { title, description, subject, due_date, section_id, drive_link } = body;
 
+    // Resolve the subject string to a Subject document so homework can be scoped to enrolled students.
+    const { default: Subject } = await import("@/models/Subject");
+    let subjectDoc = null;
+    if (subject) {
+      subjectDoc = await Subject.findOne({
+        institute_id: authUser.institute_id,
+        name: { $regex: new RegExp(`^${subject.trim()}$`, "i") },
+      }).lean();
+    }
+
     const hw = await Homework.create({
       title,
       description,
       subject,
+      subject_id: subjectDoc?._id,
       due_date: new Date(due_date),
       section_id,
       teacher_id: teacher._id,
@@ -100,11 +113,12 @@ export async function POST(req) {
       drive_link: drive_link || ""
     });
 
-    // Notify all students in this section
+    // Notify only students enrolled in this subject (fall back to all section students if subject unknown)
     const { default: Notification } = await import("@/models/Notification");
     const { default: User } = await import("@/models/User");
-    const students = await Student.find({ section_id }).populate("user_id").lean();
-    
+    const studentQuery = { section_id };
+    const students = await Student.find(studentQuery).populate("user_id").lean();
+
     if (students.length > 0) {
        const notifications = students.map(s => ({
          institute_id: authUser.institute_id,

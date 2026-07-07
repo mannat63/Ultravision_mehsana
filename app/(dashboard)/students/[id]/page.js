@@ -93,6 +93,7 @@ export default function StudentProfilePage() {
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold text-gray-900">{name}</h1>
             <p className="text-sm text-gray-500 mt-0.5">{section}</p>
+
             <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-gray-500">
               <span className="flex items-center gap-1"><Phone size={12} />{contact}</span>
               {student.parent_name && <span className="flex items-center gap-1"><User size={12} />Parent: {student.parent_name}</span>}

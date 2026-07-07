@@ -112,7 +112,17 @@ export async function GET(req) {
     const testDetails = myResults.map(r => {
         const testObj = tests.find(t => t._id.toString() === r.test_id?.toString());
         const scored = getResultMarks(r);
-        const maxMarks = testObj ? getTestMaxMarks(testObj) : 0;
+        // Scope max marks to only the subjects this student was graded on (their enrolled subjects),
+        // so a student taking a subset of a test's subjects isn't penalised for the rest.
+        let maxMarks = 0;
+        if (testObj?.subjects?.length && r.subject_marks?.length) {
+            const gradedNames = new Set(r.subject_marks.map(sm => sm.subject));
+            maxMarks = testObj.subjects
+                .filter(s => gradedNames.has(s.name))
+                .reduce((sum, s) => sum + (s.max_marks || 0), 0);
+        } else {
+            maxMarks = testObj ? getTestMaxMarks(testObj) : 0;
+        }
 
         if (testObj) {
             marksScored += scored;

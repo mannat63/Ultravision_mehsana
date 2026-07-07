@@ -48,7 +48,7 @@ export async function GET(req) {
     }
 
     // Sort newest first, project only needed fields
-    const tests = await Test.find(query)
+    let tests = await Test.find(query)
       .select("name section_id date subjects total_marks")
       .populate("section_id", "name class_id")
       .sort({ date: -1 })
@@ -57,6 +57,7 @@ export async function GET(req) {
 
     // Populate class_id on the sections to avoid front-end mapping issues
     await Section.populate(tests, { path: "section_id.class_id", select: "name", model: "Class" });
+
 
     return NextResponse.json(tests);
   } catch (error) {

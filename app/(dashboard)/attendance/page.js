@@ -88,7 +88,7 @@ export default function AttendancePage() {
     if (!selectedSection || !selectedSlotStr) return;
     const [subId, periodNo] = selectedSlotStr.split("_");
     Promise.all([
-      fetch(`/api/students?section_id=${selectedSection}&limit=200`).then((r) => r.json()),
+      fetch(`/api/students?section_id=${selectedSection}&subject_id=${subId}&limit=200`).then((r) => r.json()),
       fetch(`/api/attendance?section_id=${selectedSection}&date=${date}&subject_id=${subId}&period_no=${periodNo}`).then((r) => r.json()),
     ]).then(([s, a]) => {
       setStudents(Array.isArray(s) ? s : (s?.students || []));

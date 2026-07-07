@@ -264,11 +264,14 @@ export async function GET() {
           .sort({ date: 1 }).limit(5).lean(),
       ]);
 
-      // Compute average marks
+
+
+      // Compute average marks — max scoped to the student's graded (enrolled) subjects
       const testResults = results.filter(r => r.test_id).map(r => {
         const test = r.test_id;
         const earned = (r.subject_marks || []).reduce((s, sm) => s + sm.marks, 0);
-        const max = (test?.subjects || []).reduce((s, sub) => s + sub.max_marks, 0);
+        const gradedNames = new Set((r.subject_marks || []).map(sm => sm.subject));
+        const max = (test?.subjects || []).filter(sub => gradedNames.has(sub.name)).reduce((s, sub) => s + sub.max_marks, 0);
         return { earned, max, pct: max > 0 ? Math.round((earned / max) * 1000) / 10 : 0, subjects: r.subject_marks || [] };
       });
 
@@ -311,12 +314,11 @@ export async function GET() {
         totalInSection,
         strongTopics,
         weakTopics,
-        upcomingTests: upcomingTests.map(t => ({
-          _id: t._id,
-          name: t.name,
-          date: t.date,
-          subjectCount: t.subjects?.length || 0,
-        })),
+        upcomingTests: upcomingTests
+          .map(t => {
+            return { _id: t._id, name: t.name, date: t.date, subjectCount: (t.subjects || []).length };
+          })
+          .filter(t => t.subjectCount > 0),
         role: "STUDENT",
         className: student.section_id?.class_id?.name || "Unassigned",
         sectionName: student.section_id?.name || "Unassigned",

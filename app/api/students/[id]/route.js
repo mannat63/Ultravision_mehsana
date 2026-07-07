@@ -36,7 +36,7 @@ export async function GET(req, { params }) {
     const thirty = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     const [feeRecord, payments, att30, att90, results] = await Promise.all([
-      Fee.findOne({ student_id: sid }).lean(),
+      Fee.findOne({ student_id: sid }).sort({ due_date: -1 }).lean(),
       Payment.find({ student_id: sid }).sort({ createdAt: -1 }).limit(10).lean(),
 
       Attendance.aggregate([
@@ -56,11 +56,13 @@ export async function GET(req, { params }) {
         .lean(),
     ]);
 
-    // Compute performance
+    // Compute performance — max is scoped to the subjects the student was actually graded on
+    // (their enrolled subjects), so partial-enrollment students aren't unfairly penalised.
     const testResults = results.map(r => {
       const test = r.test_id;
       const earned = (r.subject_marks || []).reduce((s, sm) => s + sm.marks, 0);
-      const max    = (test?.subjects || []).reduce((s, sub) => s + sub.max_marks, 0);
+      const gradedNames = new Set((r.subject_marks || []).map(sm => sm.subject));
+      const max    = (test?.subjects || []).filter(sub => gradedNames.has(sub.name)).reduce((s, sub) => s + sub.max_marks, 0);
       return {
         testId:    test?._id,
         testName:  test?.name || "—",
@@ -106,7 +108,7 @@ export async function PUT(req, { params }) {
     await dbConnect();
     const authUser = await requireRole(["ADMIN"]);
     const { id } = await params;
-    const { name, phoneOrEmail, section_id, parent_name, parent_phone, admission_date } = await req.json();
+    const { name, phoneOrEmail, section_id, parent_name, parent_phone, admission_date, total_fee, due_date } = await req.json();
 
     if (phoneOrEmail) {
       const trimmed = phoneOrEmail.trim();
@@ -131,8 +133,31 @@ export async function PUT(req, { params }) {
     student.section_id  = section_id;
     student.parent_name  = parent_name;
     student.parent_phone = parent_phone;
+
     if (admission_date) student.admission_date = new Date(admission_date);
     await student.save();
+
+    // ── Editable fees: update the student's latest fee record (or create one) ──
+    if (total_fee !== undefined && total_fee !== null && total_fee !== "") {
+      const amount = Number(total_fee) || 0;
+      const latestFee = await Fee.findOne({ student_id: student._id }).sort({ due_date: -1 });
+      if (latestFee) {
+        latestFee.total_amount = amount;
+        if (due_date) latestFee.due_date = new Date(due_date);
+        // pre-save hook recomputes due_amount & status from total_amount - paid_amount
+        await latestFee.save();
+      } else {
+        await Fee.create({
+          student_id: student._id,
+          total_amount: amount,
+          paid_amount: 0,
+          due_amount: amount,
+          due_date: due_date ? new Date(due_date) : new Date(),
+          status: "DUE",
+          institute_id: authUser.institute_id,
+        });
+      }
+    }
 
     await logActivity({
       institute_id: authUser.institute_id,

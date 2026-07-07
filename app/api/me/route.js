@@ -31,7 +31,12 @@ export async function GET() {
       const student = await Student.findOne({ user_id: user._id })
         .populate({ path: "section_id", select: "name class_id", populate: { path: "class_id", select: "name" } })
         .lean();
-      return NextResponse.json({ ...base, studentId: student?._id, sectionName: student?.section_id?.name, className: student?.section_id?.class_id?.name });
+      return NextResponse.json({
+        ...base,
+        studentId: student?._id,
+        sectionName: student?.section_id?.name,
+        className: student?.section_id?.class_id?.name,
+      });
     }
 
     return NextResponse.json(base);

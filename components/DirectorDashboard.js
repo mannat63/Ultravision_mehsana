@@ -15,6 +15,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LabelList, LineChart, Line, Legend, RadialBarChart, RadialBar,
 } from "recharts";
+import { createPdf, addTable, addSectionTitle, downloadPdf } from "@/lib/exportPdf";
 
 const BATCH_COLORS = ["#1e1b4b", "#312e81", "#3730a3", "#4338ca", "#4f46e5", "#6366f1", "#818cf8"];
 
@@ -23,6 +24,13 @@ function formatCurrency(amount) {
   if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
   if (amount >= 1000) return `₹${(amount / 1000).toFixed(1)}K`;
   return `₹${amount.toLocaleString("en-IN")}`;
+}
+
+function formatCurrencyPdf(amount) {
+  if (amount >= 10000000) return `Rs. ${(amount / 10000000).toFixed(1)}Cr`;
+  if (amount >= 100000) return `Rs. ${(amount / 100000).toFixed(1)}L`;
+  if (amount >= 1000) return `Rs. ${(amount / 1000).toFixed(1)}K`;
+  return `Rs. ${amount.toLocaleString("en-IN")}`;
 }
 
 function GrowthBadge({ value }) {
@@ -78,6 +86,97 @@ export default function DirectorDashboard() {
   const [error, setError] = useState(null);
   const [riskFilter, setRiskFilter] = useState("ALL");
   const [batchSort, setBatchSort] = useState("occupancy");
+  
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportDateFrom, setReportDateFrom] = useState("");
+  const [reportDateTo, setReportDateTo] = useState("");
+  const [generatingReport, setGeneratingReport] = useState(false);
+
+  const handleGenerateReport = async () => {
+    if (!reportDateFrom || !reportDateTo) return alert("Please select both dates.");
+    setGeneratingReport(true);
+    try {
+      const res = await fetch(`/api/reports/admin?dateFrom=${reportDateFrom}&dateTo=${reportDateTo}`);
+      const rData = await res.json();
+      if (rData.error) throw new Error(rData.error);
+      
+      const { doc, addFooter } = await createPdf({ title: "Director's Summary Report", subtitle: `Period: ${new Date(reportDateFrom).toLocaleDateString()} to ${new Date(reportDateTo).toLocaleDateString()}` });
+      
+      let startY = 38; // tighter top margin
+      
+      startY = addSectionTitle(doc, "Key Metrics & Top Performer", startY);
+      
+      const topPerfName = rData.overview?.top_performer ? rData.overview.top_performer.name : "N/A";
+      const topPerfScore = rData.overview?.top_performer ? `${rData.overview.top_performer.score}%` : "N/A";
+      
+      const metricsBody = [
+        ["Total Students", String(rData.overview?.total_students || 0), "Overall Top Performer", topPerfName],
+        ["Revenue Collected", formatCurrencyPdf(rData.overview?.total_revenue_collected || 0), "Top Performer Score", topPerfScore],
+        ["Pending Fees", formatCurrencyPdf(rData.overview?.pending_fees || 0), "Tests Conducted", String(rData.overview?.tests_conducted || 0)],
+        ["Avg Attendance", `${rData.overview?.avg_attendance || 0}%`, "", ""],
+      ];
+      startY = addTable(doc, { startY, head: ["Metric", "Value", "Metric", "Value"], body: metricsBody }) + 6;
+      
+      if (rData.students && rData.students.length > 0) {
+        const batches = {};
+        const atRisk = [];
+        
+        // Pre-map section toppers for quick lookup
+        const secToppersMap = {};
+        if (rData.overview?.section_toppers) {
+          rData.overview.section_toppers.forEach(t => {
+            secToppersMap[t.section] = `${t.name} (${t.score}%)`;
+          });
+        }
+        
+        rData.students.forEach(s => {
+          const b = s.student.section || "Unknown";
+          if (!batches[b]) batches[b] = { count: 0, revenue: 0, due: 0, att: 0, attDays: 0, testMarks: 0, testTotal: 0 };
+          batches[b].count++;
+          batches[b].revenue += s.fees?.period_paid || 0;
+          batches[b].due += s.fees?.due || 0;
+          batches[b].att += s.attendance?.percentage || 0;
+          if (s.attendance?.total_days > 0) batches[b].attDays++;
+          batches[b].testMarks += s.tests?.marks_scored || 0;
+          batches[b].testTotal += s.tests?.marks_total || 0;
+          
+          const att = s.attendance?.percentage || 0;
+          const perf = s.tests?.marks_total > 0 ? (s.tests.marks_scored / s.tests.marks_total) * 100 : null;
+          if (att < 75 || (perf !== null && perf < 40) || (s.fees?.due > 5000)) {
+            atRisk.push(s);
+          }
+        });
+        
+        const batchBody = Object.keys(batches).map(b => {
+          const d = batches[b];
+          const avgAtt = d.attDays > 0 ? (d.att / d.attDays).toFixed(1) : 0;
+          const avgPerf = d.testTotal > 0 ? ((d.testMarks / d.testTotal) * 100).toFixed(1) : 0;
+          const topStud = secToppersMap[b] || "N/A";
+          return [b, String(d.count), formatCurrencyPdf(d.revenue), formatCurrencyPdf(d.due), `${avgAtt}%`, `${avgPerf}%`, topStud];
+        });
+        
+        startY = addSectionTitle(doc, "Batch Summary & Toppers", startY);
+        startY = addTable(doc, { startY, head: ["Batch", "Students", "Period Rev", "Pending", "Avg Att", "Avg Perf", "Top Student"], body: batchBody }) + 6;
+        
+        const topAtRisk = atRisk.sort((a,b) => (b.fees?.due || 0) - (a.fees?.due || 0)).slice(0, 5);
+        if (topAtRisk.length > 0) {
+          startY = addSectionTitle(doc, "Students At Risk (Top 5)", startY);
+          const riskBody = topAtRisk.map(s => {
+            const att = s.attendance?.percentage || 0;
+            const perf = s.tests?.marks_total > 0 ? ((s.tests.marks_scored / s.tests.marks_total) * 100).toFixed(1) + '%' : 'N/A';
+            return [s.student.name, s.student.section, formatCurrencyPdf(s.fees?.due || 0), `${att}%`, perf];
+          });
+          startY = addTable(doc, { startY, head: ["Student", "Section", "Pending Fees", "Attendance", "Performance"], body: riskBody }) + 6;
+        }
+      }
+      
+      downloadPdf(doc, `Director_Report_${reportDateFrom}_to_${reportDateTo}.pdf`, addFooter);
+      setShowReportModal(false);
+    } catch (e) {
+      alert("Error generating report: " + e.message);
+    }
+    setGeneratingReport(false);
+  };
 
   useEffect(() => {
     fetch("/api/dashboard/director")
@@ -177,14 +276,54 @@ export default function DirectorDashboard() {
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-6 pb-4">
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-gray-100">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+              <div className="flex items-center gap-2 text-amber-600 font-bold">
+                <BookOpen size={18} /> Director Report
+              </div>
+              <button onClick={() => setShowReportModal(false)} className="text-gray-400 hover:text-gray-600">
+                <XCircle size={20} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">From Date</label>
+                <input type="date" value={reportDateFrom} onChange={(e) => setReportDateFrom(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">To Date</label>
+                <input type="date" value={reportDateTo} onChange={(e) => setReportDateTo(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all" />
+              </div>
+            </div>
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+              <button onClick={() => setShowReportModal(false)} className="btn-secondary">Cancel</button>
+              <button onClick={handleGenerateReport} disabled={generatingReport} className="btn-primary !bg-amber-500 hover:!bg-amber-600 !border-amber-600 !text-white !shadow-amber-500/20">
+                {generatingReport ? "Generating..." : "Generate PDF"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── ACTION BAR ─── */}
-      <div className="flex justify-end gap-2 mb-4">
-        <Link href="/reports" className="btn-secondary whitespace-nowrap text-xs !py-2 !px-3.5">
-          <BarChart3 size={13} /> Reports
-        </Link>
-        <Link href="/students" className="btn-primary whitespace-nowrap text-xs !py-2 !px-3.5">
-          <Users size={13} /> Students
-        </Link>
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
+        <div>
+          <h2 className="text-lg md:text-xl font-extrabold text-gray-900 tracking-tight">Welcome back, Director</h2>
+          <p className="text-sm font-medium text-gray-500 mt-1">Here is the overall status of the institute as of <span className="text-gray-800 font-bold">{new Date().toLocaleDateString("en-IN", { month: "long", day: "numeric", year: "numeric" })}</span>.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowReportModal(true)} className="btn-secondary whitespace-nowrap text-xs !py-2 !px-3.5 border-amber-300 bg-gradient-to-br from-amber-50 to-white text-amber-700 hover:border-amber-400 hover:shadow-sm transition-all font-bold" style={{ borderWidth: '2px' }}>
+            <BookOpen size={13} className="text-amber-500" /> Director Report
+          </button>
+          <Link href="/reports" className="btn-secondary whitespace-nowrap text-xs !py-2 !px-3.5">
+            <BarChart3 size={13} /> Reports
+          </Link>
+          <Link href="/students" className="btn-primary whitespace-nowrap text-xs !py-2 !px-3.5">
+            <Users size={13} /> Students
+          </Link>
+        </div>
       </div>
 
       {/* ─── KPI ROW ─── */}

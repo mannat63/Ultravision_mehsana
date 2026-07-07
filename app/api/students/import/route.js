@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth";
 import Student from "@/models/Student";
 import User from "@/models/User";
 import Section from "@/models/Section";
+import Class from "@/models/Class";
 import Fee from "@/models/Fee";
 
 export async function POST(req) {
@@ -12,43 +13,45 @@ export async function POST(req) {
     await dbConnect();
     const authUser = await requireRole(["ADMIN"]);
 
-    const formData = await req.formData();
-    const file = formData.get("file");
+    const body = await req.json();
+    const { students } = body; // Array of objects
     
-    if (!file) {
-      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    if (!students || !Array.isArray(students) || students.length === 0) {
+      return NextResponse.json({ error: "No student data provided" }, { status: 400 });
     }
 
-    const text = await file.text();
-    const rows = text.split("\n").map((r) => r.trim()).filter((r) => r);
+    // Prefetch all classes and sections to map by name
+    const existingClasses = await Class.find({ institute_id: authUser.institute_id });
+    const existingSections = await Section.find({ institute_id: authUser.institute_id });
     
-    if (rows.length < 2) {
-      return NextResponse.json({ error: "File must contain a header row and at least one data row" }, { status: 400 });
-    }
-
-    // Skip header row
-    const dataRows = rows.slice(1);
-
-    // Fetch all sections to map by name
-    const sections = await Section.find({ institute_id: authUser.institute_id });
-    const sectionMap = {};
-    sections.forEach(b => {
-      sectionMap[b.name.toLowerCase()] = b._id;
+    const classMap = {}; // name -> class_id
+    existingClasses.forEach(c => classMap[c.name.toLowerCase()] = c._id);
+    
+    // Store sections per class: classId -> { sectionName -> sectionId }
+    const sectionMap = {}; 
+    existingSections.forEach(s => {
+      const cid = s.class_id.toString();
+      if (!sectionMap[cid]) sectionMap[cid] = {};
+      sectionMap[cid][s.name.toLowerCase()] = s._id;
     });
 
     let imported = 0;
     let failed = 0;
     const errors = [];
 
-    // Parse parsing standard CSV (handling basic quoted strings could be added, but keeping it simple for now as requested)
-    for (let i = 0; i < dataRows.length; i++) {
-      const rowNum = i + 2; // +1 for 0-index, +1 for header
-      const cols = dataRows[i].split(",").map(c => c.trim().replace(/^"|"$/g, ''));
+    for (let i = 0; i < students.length; i++) {
+      const rowNum = i + 1;
+      const data = students[i];
       
-      const [name, parent_phone, section_name, admission_date_raw, total_fee] = cols;
+      const name = data.name;
+      const parent_phone = data.parent_phone;
+      const class_name = data.class_name;
+      const section_name = data.section_name;
+      const admission_date_raw = data.admission_date;
+      const total_fee = data.total_fee;
 
-      if (!name || !parent_phone || !section_name) {
-        errors.push(`Row ${rowNum}: Missing required fields (Name, Phone, or Section Name)`);
+      if (!name || !parent_phone || !class_name || !section_name) {
+        errors.push(`Row ${rowNum}: Missing required fields (Name, Phone, Class, or Section)`);
         failed++;
         continue;
       }
@@ -61,14 +64,28 @@ export async function POST(req) {
         continue;
       }
 
-      let bId = sectionMap[section_name.toLowerCase()];
+      // 1. Get or Create Class
+      let cId = classMap[class_name.toLowerCase()];
+      if (!cId) {
+        const newClass = await Class.create({
+           name: class_name,
+           institute_id: authUser.institute_id
+        });
+        cId = newClass._id;
+        classMap[class_name.toLowerCase()] = cId;
+        sectionMap[cId.toString()] = {};
+      }
+
+      // 2. Get or Create Section
+      let bId = sectionMap[cId.toString()][section_name.toLowerCase()];
       if (!bId) {
         const newSection = await Section.create({
            name: section_name,
+           class_id: cId,
            institute_id: authUser.institute_id
         });
         bId = newSection._id;
-        sectionMap[section_name.toLowerCase()] = bId;
+        sectionMap[cId.toString()][section_name.toLowerCase()] = bId;
       }
 
       // Check duplicate student by phone
@@ -107,17 +124,19 @@ export async function POST(req) {
           institute_id: authUser.institute_id
         });
 
-        const parsedFee = parseFloat(total_fee);
-        if (!isNaN(parsedFee) && parsedFee >= 0) {
-          await Fee.create({
-            student_id: student._id,
-            total_amount: parsedFee,
-            paid_amount: 0,
-            due_amount: parsedFee,
-            due_date: admission_date,
-            status: "DUE",
-            institute_id: authUser.institute_id
-          });
+        if (total_fee !== undefined && total_fee !== null) {
+          const parsedFee = parseFloat(total_fee);
+          if (!isNaN(parsedFee) && parsedFee >= 0) {
+            await Fee.create({
+              student_id: student._id,
+              total_amount: parsedFee,
+              paid_amount: 0,
+              due_amount: parsedFee,
+              due_date: admission_date,
+              status: "DUE",
+              institute_id: authUser.institute_id
+            });
+          }
         }
 
         imported++;

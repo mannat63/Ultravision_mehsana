@@ -518,12 +518,12 @@ export default function FeesPage() {
               const body = students.map((s, i) => {
                 const sName = s.user_id?.name || s.parent_name || "—";
                 const sPhone = s.parent_phone || "—";
-                const sttFees = fees.filter(f => f.student_id?.toString() === s._id?.toString());
+                const sttFees = feesByStudent[String(s._id)] || [];
                 const totalAmt = sttFees.reduce((a, f) => a + (f.total_amount || 0), 0);
                 const paidAmt = sttFees.reduce((a, f) => a + (f.paid_amount || 0), 0);
                 const dueAmt = sttFees.reduce((a, f) => a + (f.due_amount || 0), 0);
                 const overdue = sttFees.some(f => feeStatus(f) === "OVERDUE");
-                return [i + 1, sName, sPhone, `₹${totalAmt.toLocaleString()}`, `₹${paidAmt.toLocaleString()}`, `₹${dueAmt.toLocaleString()}`, overdue ? "OVERDUE" : dueAmt > 0 ? "DUE" : "PAID"];
+                return [i + 1, sName, sPhone, `Rs. ${totalAmt.toLocaleString()}`, `Rs. ${paidAmt.toLocaleString()}`, `Rs. ${dueAmt.toLocaleString()}`, overdue ? "OVERDUE" : dueAmt > 0 ? "DUE" : "PAID"];
               });
               addTable(doc, { startY, head, body });
               downloadPdf(doc, "fee-report.pdf", addFooter);
