@@ -26,6 +26,7 @@ export async function GET(req) {
     });
     return NextResponse.json({ success: true, status });
   } catch (error) {
-    return NextResponse.json({ success: false }, { status: 500 });
+    console.error("Health ping failed:", error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
