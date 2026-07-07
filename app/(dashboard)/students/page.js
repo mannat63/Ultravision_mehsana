@@ -184,6 +184,22 @@ export default function StudentsPage() {
 
   async function handleSave(e) {
     e.preventDefault();
+
+    // ── Client-side validation (mirrors the API rules for instant feedback) ──
+    const contact = (form.email || "").trim();
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
+    const isPhone = /^\+91\s?\d{10}$/.test(contact);
+    if (!isEmail && !isPhone) {
+      return toast("Enter a valid email or a 10-digit phone with +91 prefix", "error");
+    }
+    const pp = (form.parent_phone || "").trim();
+    if (pp && pp !== "+91" && pp !== "+91 " && !/^\+91\s?\d{10}$/.test(pp)) {
+      return toast("Parent phone must be 10 digits with +91 prefix (e.g. +91 9876543210)", "error");
+    }
+    if (form.total_fee !== "" && form.total_fee != null && Number(form.total_fee) < 0) {
+      return toast("Fee amount cannot be negative", "error");
+    }
+
     setSubmitting(true);
     try {
       const url    = editingStudent ? `/api/students/${editingStudent._id}` : "/api/students";

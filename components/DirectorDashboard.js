@@ -16,8 +16,16 @@ import {
   LabelList, LineChart, Line, Legend, RadialBarChart, RadialBar,
 } from "recharts";
 import { createPdf, addTable, addSectionTitle, downloadPdf } from "@/lib/exportPdf";
+import * as XLSX from "xlsx";
 
 const BATCH_COLORS = ["#1e1b4b", "#312e81", "#3730a3", "#4338ca", "#4f46e5", "#6366f1", "#818cf8"];
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good Morning";
+  if (h < 17) return "Good Afternoon";
+  return "Good Evening";
+}
 
 function formatCurrency(amount) {
   if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(1)}Cr`;
@@ -91,89 +99,201 @@ export default function DirectorDashboard() {
   const [reportDateFrom, setReportDateFrom] = useState("");
   const [reportDateTo, setReportDateTo] = useState("");
   const [generatingReport, setGeneratingReport] = useState(false);
+  const [reportSections, setReportSections] = useState({ metrics: true, batches: true, atRisk: true, notes: false });
+  const [reportNotes, setReportNotes] = useState("");
+
+  const toggleReportSection = (key) => setReportSections((p) => ({ ...p, [key]: !p[key] }));
+
+  // Fetch + shape the report data once; PDF / Excel / Print all consume this.
+  const buildReportModel = async () => {
+    if (!reportDateFrom || !reportDateTo) throw new Error("Please select both From and To dates.");
+    if (new Date(reportDateFrom) > new Date(reportDateTo)) throw new Error("From date cannot be after To date.");
+
+    const res = await fetch(`/api/reports/admin?dateFrom=${reportDateFrom}&dateTo=${reportDateTo}`);
+    const rData = await res.json();
+    if (rData.error) throw new Error(rData.error);
+
+    const ov = rData.overview || {};
+    const metrics = [
+      ["Total Students", String(ov.total_students || 0)],
+      ["Revenue Collected", formatCurrencyPdf(ov.total_revenue_collected || 0)],
+      ["Pending Fees", formatCurrencyPdf(ov.pending_fees || 0)],
+      ["Avg Attendance", `${ov.avg_attendance || 0}%`],
+      ["Tests Conducted", String(ov.tests_conducted || 0)],
+      ["Overall Top Performer", ov.top_performer ? `${ov.top_performer.name} (${ov.top_performer.score}%)` : "N/A"],
+    ];
+
+    const secToppersMap = {};
+    (ov.section_toppers || []).forEach((t) => { secToppersMap[t.section] = `${t.name} (${t.score}%)`; });
+
+    const batchesAgg = {};
+    const atRiskAll = [];
+    (rData.students || []).forEach((s) => {
+      const b = s.student.section || "Unknown";
+      if (!batchesAgg[b]) batchesAgg[b] = { count: 0, revenue: 0, due: 0, att: 0, attDays: 0, testMarks: 0, testTotal: 0 };
+      const d = batchesAgg[b];
+      d.count++;
+      d.revenue += s.fees?.period_paid || 0;
+      d.due += s.fees?.due || 0;
+      d.att += s.attendance?.percentage || 0;
+      if (s.attendance?.total_days > 0) d.attDays++;
+      d.testMarks += s.tests?.marks_scored || 0;
+      d.testTotal += s.tests?.marks_total || 0;
+
+      const att = s.attendance?.percentage || 0;
+      const perf = s.tests?.marks_total > 0 ? (s.tests.marks_scored / s.tests.marks_total) * 100 : null;
+      if (att < 75 || (perf !== null && perf < 40) || (s.fees?.due > 5000)) atRiskAll.push(s);
+    });
+
+    const batches = Object.keys(batchesAgg).map((b) => {
+      const d = batchesAgg[b];
+      return {
+        batch: b,
+        students: d.count,
+        revenue: d.revenue,
+        due: d.due,
+        avgAtt: d.attDays > 0 ? (d.att / d.attDays).toFixed(1) : "0",
+        avgPerf: d.testTotal > 0 ? ((d.testMarks / d.testTotal) * 100).toFixed(1) : "0",
+        topStudent: secToppersMap[b] || "N/A",
+      };
+    });
+
+    const atRisk = atRiskAll
+      .sort((a, b) => (b.fees?.due || 0) - (a.fees?.due || 0))
+      .slice(0, 10)
+      .map((s) => ({
+        name: s.student.name,
+        section: s.student.section,
+        due: s.fees?.due || 0,
+        att: `${s.attendance?.percentage || 0}%`,
+        perf: s.tests?.marks_total > 0 ? ((s.tests.marks_scored / s.tests.marks_total) * 100).toFixed(1) + "%" : "N/A",
+      }));
+
+    return { metrics, batches, atRisk, hasStudents: (rData.students || []).length > 0 };
+  };
+
+  const periodLabel = () => `${new Date(reportDateFrom).toLocaleDateString()} to ${new Date(reportDateTo).toLocaleDateString()}`;
 
   const handleGenerateReport = async () => {
-    if (!reportDateFrom || !reportDateTo) return alert("Please select both dates.");
     setGeneratingReport(true);
     try {
-      const res = await fetch(`/api/reports/admin?dateFrom=${reportDateFrom}&dateTo=${reportDateTo}`);
-      const rData = await res.json();
-      if (rData.error) throw new Error(rData.error);
-      
-      const { doc, addFooter } = await createPdf({ title: "Director's Summary Report", subtitle: `Period: ${new Date(reportDateFrom).toLocaleDateString()} to ${new Date(reportDateTo).toLocaleDateString()}` });
-      
-      let startY = 38; // tighter top margin
-      
-      startY = addSectionTitle(doc, "Key Metrics & Top Performer", startY);
-      
-      const topPerfName = rData.overview?.top_performer ? rData.overview.top_performer.name : "N/A";
-      const topPerfScore = rData.overview?.top_performer ? `${rData.overview.top_performer.score}%` : "N/A";
-      
-      const metricsBody = [
-        ["Total Students", String(rData.overview?.total_students || 0), "Overall Top Performer", topPerfName],
-        ["Revenue Collected", formatCurrencyPdf(rData.overview?.total_revenue_collected || 0), "Top Performer Score", topPerfScore],
-        ["Pending Fees", formatCurrencyPdf(rData.overview?.pending_fees || 0), "Tests Conducted", String(rData.overview?.tests_conducted || 0)],
-        ["Avg Attendance", `${rData.overview?.avg_attendance || 0}%`, "", ""],
-      ];
-      startY = addTable(doc, { startY, head: ["Metric", "Value", "Metric", "Value"], body: metricsBody }) + 6;
-      
-      if (rData.students && rData.students.length > 0) {
-        const batches = {};
-        const atRisk = [];
-        
-        // Pre-map section toppers for quick lookup
-        const secToppersMap = {};
-        if (rData.overview?.section_toppers) {
-          rData.overview.section_toppers.forEach(t => {
-            secToppersMap[t.section] = `${t.name} (${t.score}%)`;
-          });
+      const model = await buildReportModel();
+      const { doc, addFooter } = await createPdf({ title: "Director's Summary Report", subtitle: `Period: ${periodLabel()}` });
+      let startY = 38;
+
+      if (reportSections.metrics) {
+        startY = addSectionTitle(doc, "Key Metrics & Top Performer", startY);
+        const rows = [];
+        for (let i = 0; i < model.metrics.length; i += 2) {
+          const a = model.metrics[i]; const b = model.metrics[i + 1] || ["", ""];
+          rows.push([a[0], a[1], b[0], b[1]]);
         }
-        
-        rData.students.forEach(s => {
-          const b = s.student.section || "Unknown";
-          if (!batches[b]) batches[b] = { count: 0, revenue: 0, due: 0, att: 0, attDays: 0, testMarks: 0, testTotal: 0 };
-          batches[b].count++;
-          batches[b].revenue += s.fees?.period_paid || 0;
-          batches[b].due += s.fees?.due || 0;
-          batches[b].att += s.attendance?.percentage || 0;
-          if (s.attendance?.total_days > 0) batches[b].attDays++;
-          batches[b].testMarks += s.tests?.marks_scored || 0;
-          batches[b].testTotal += s.tests?.marks_total || 0;
-          
-          const att = s.attendance?.percentage || 0;
-          const perf = s.tests?.marks_total > 0 ? (s.tests.marks_scored / s.tests.marks_total) * 100 : null;
-          if (att < 75 || (perf !== null && perf < 40) || (s.fees?.due > 5000)) {
-            atRisk.push(s);
-          }
-        });
-        
-        const batchBody = Object.keys(batches).map(b => {
-          const d = batches[b];
-          const avgAtt = d.attDays > 0 ? (d.att / d.attDays).toFixed(1) : 0;
-          const avgPerf = d.testTotal > 0 ? ((d.testMarks / d.testTotal) * 100).toFixed(1) : 0;
-          const topStud = secToppersMap[b] || "N/A";
-          return [b, String(d.count), formatCurrencyPdf(d.revenue), formatCurrencyPdf(d.due), `${avgAtt}%`, `${avgPerf}%`, topStud];
-        });
-        
-        startY = addSectionTitle(doc, "Batch Summary & Toppers", startY);
-        startY = addTable(doc, { startY, head: ["Batch", "Students", "Period Rev", "Pending", "Avg Att", "Avg Perf", "Top Student"], body: batchBody }) + 6;
-        
-        const topAtRisk = atRisk.sort((a,b) => (b.fees?.due || 0) - (a.fees?.due || 0)).slice(0, 5);
-        if (topAtRisk.length > 0) {
-          startY = addSectionTitle(doc, "Students At Risk (Top 5)", startY);
-          const riskBody = topAtRisk.map(s => {
-            const att = s.attendance?.percentage || 0;
-            const perf = s.tests?.marks_total > 0 ? ((s.tests.marks_scored / s.tests.marks_total) * 100).toFixed(1) + '%' : 'N/A';
-            return [s.student.name, s.student.section, formatCurrencyPdf(s.fees?.due || 0), `${att}%`, perf];
-          });
-          startY = addTable(doc, { startY, head: ["Student", "Section", "Pending Fees", "Attendance", "Performance"], body: riskBody }) + 6;
-        }
+        startY = addTable(doc, { startY, head: ["Metric", "Value", "Metric", "Value"], body: rows }) + 6;
       }
-      
+
+      if (reportSections.batches && model.batches.length > 0) {
+        startY = addSectionTitle(doc, "Batch Summary & Toppers", startY);
+        startY = addTable(doc, {
+          startY,
+          head: ["Batch", "Students", "Period Rev", "Pending", "Avg Att", "Avg Perf", "Top Student"],
+          body: model.batches.map((b) => [b.batch, String(b.students), formatCurrencyPdf(b.revenue), formatCurrencyPdf(b.due), `${b.avgAtt}%`, `${b.avgPerf}%`, b.topStudent]),
+        }) + 6;
+      }
+
+      if (reportSections.atRisk && model.atRisk.length > 0) {
+        startY = addSectionTitle(doc, "Students At Risk", startY);
+        startY = addTable(doc, {
+          startY,
+          head: ["Student", "Section", "Pending Fees", "Attendance", "Performance"],
+          body: model.atRisk.map((s) => [s.name, s.section, formatCurrencyPdf(s.due), s.att, s.perf]),
+        }) + 6;
+      }
+
+      if (reportSections.notes && reportNotes.trim()) {
+        startY = addSectionTitle(doc, "Director's Notes", startY);
+        const lines = doc.splitTextToSize(reportNotes.trim(), 180);
+        doc.setFontSize(10).setTextColor(60);
+        doc.text(lines, 14, startY + 2);
+      }
+
       downloadPdf(doc, `Director_Report_${reportDateFrom}_to_${reportDateTo}.pdf`, addFooter);
       setShowReportModal(false);
     } catch (e) {
       alert("Error generating report: " + e.message);
+    }
+    setGeneratingReport(false);
+  };
+
+  const handleExportExcel = async () => {
+    setGeneratingReport(true);
+    try {
+      const model = await buildReportModel();
+      const wb = XLSX.utils.book_new();
+
+      if (reportSections.metrics) {
+        const aoa = [["Director's Summary Report"], [`Period: ${periodLabel()}`], [], ["Metric", "Value"], ...model.metrics];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Key Metrics");
+      }
+      if (reportSections.batches && model.batches.length > 0) {
+        const aoa = [["Batch", "Students", "Period Revenue", "Pending", "Avg Attendance", "Avg Performance", "Top Student"],
+          ...model.batches.map((b) => [b.batch, b.students, b.revenue, b.due, `${b.avgAtt}%`, `${b.avgPerf}%`, b.topStudent])];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Batch Summary");
+      }
+      if (reportSections.atRisk && model.atRisk.length > 0) {
+        const aoa = [["Student", "Section", "Pending Fees", "Attendance", "Performance"],
+          ...model.atRisk.map((s) => [s.name, s.section, s.due, s.att, s.perf])];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "At Risk");
+      }
+      if (reportSections.notes && reportNotes.trim()) {
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Director's Notes"], [reportNotes.trim()]]), "Notes");
+      }
+      if (!wb.SheetNames.length) throw new Error("Select at least one section to include.");
+
+      XLSX.writeFile(wb, `Director_Report_${reportDateFrom}_to_${reportDateTo}.xlsx`);
+      setShowReportModal(false);
+    } catch (e) {
+      alert("Error exporting Excel: " + e.message);
+    }
+    setGeneratingReport(false);
+  };
+
+  const handlePrintReport = async () => {
+    setGeneratingReport(true);
+    try {
+      const model = await buildReportModel();
+      const esc = (v) => String(v).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+      const table = (head, rows) =>
+        `<table><thead><tr>${head.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows
+          .map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`)
+          .join("")}</tbody></table>`;
+
+      let body = `<h1>Director's Summary Report</h1><p class="sub">Period: ${esc(periodLabel())}</p>`;
+      if (reportSections.metrics) body += `<h2>Key Metrics & Top Performer</h2>${table(["Metric", "Value"], model.metrics)}`;
+      if (reportSections.batches && model.batches.length > 0)
+        body += `<h2>Batch Summary & Toppers</h2>${table(["Batch", "Students", "Period Rev", "Pending", "Avg Att", "Avg Perf", "Top Student"],
+          model.batches.map((b) => [b.batch, b.students, formatCurrencyPdf(b.revenue), formatCurrencyPdf(b.due), `${b.avgAtt}%`, `${b.avgPerf}%`, b.topStudent]))}`;
+      if (reportSections.atRisk && model.atRisk.length > 0)
+        body += `<h2>Students At Risk</h2>${table(["Student", "Section", "Pending Fees", "Attendance", "Performance"],
+          model.atRisk.map((s) => [s.name, s.section, formatCurrencyPdf(s.due), s.att, s.perf]))}`;
+      if (reportSections.notes && reportNotes.trim())
+        body += `<h2>Director's Notes</h2><p class="notes">${esc(reportNotes.trim())}</p>`;
+
+      const win = window.open("", "_blank");
+      if (!win) throw new Error("Popup blocked. Please allow popups to print.");
+      win.document.write(`<!doctype html><html><head><title>Director Report</title><style>
+        body{font-family:system-ui,Arial,sans-serif;color:#1e293b;padding:32px;max-width:900px;margin:auto}
+        h1{font-size:22px;margin:0 0 4px}h2{font-size:15px;margin:24px 0 8px;color:#334155;border-bottom:2px solid #e2e8f0;padding-bottom:4px}
+        .sub{color:#64748b;margin:0 0 8px;font-size:13px}
+        table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px}
+        th,td{border:1px solid #e2e8f0;padding:6px 8px;text-align:left}th{background:#f8fafc;font-weight:700}
+        .notes{white-space:pre-wrap;font-size:13px;line-height:1.5}
+      </style></head><body>${body}</body></html>`);
+      win.document.close();
+      win.focus();
+      setTimeout(() => win.print(), 300);
+      setShowReportModal(false);
+    } catch (e) {
+      alert("Error printing report: " + e.message);
     }
     setGeneratingReport(false);
   };
@@ -310,7 +430,7 @@ export default function DirectorDashboard() {
       {/* ─── ACTION BAR ─── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
         <div>
-          <h2 className="text-lg md:text-xl font-extrabold text-gray-900 tracking-tight">Welcome back, Director</h2>
+          <h2 className="text-lg md:text-xl font-extrabold text-gray-900 tracking-tight">{getGreeting()}, Director! 👋</h2>
           <p className="text-sm font-medium text-gray-500 mt-1">Here is the overall status of the institute as of <span className="text-gray-800 font-bold">{new Date().toLocaleDateString("en-IN", { month: "long", day: "numeric", year: "numeric" })}</span>.</p>
         </div>
         <div className="flex items-center gap-2">

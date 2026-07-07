@@ -86,8 +86,27 @@ export default function TeachersPage() {
 
   useEffect(() => { loadAll(); }, []);
 
+  // Validate teacher contact fields; returns an error string or null.
+  function validateTeacher(t) {
+    const email = (t.email || "").trim();
+    const phone = (t.phone || "").trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return "Please enter a valid email address";
+    }
+    if (phone && phone !== "+91" && phone !== "+91 " && !/^\+91\s?\d{10}$/.test(phone)) {
+      return "Phone must be 10 digits with +91 prefix (e.g. +91 9876543210)";
+    }
+    if (!email && (!phone || phone === "+91" || phone === "+91 ")) {
+      return "Enter an email or a 10-digit phone number";
+    }
+    return null;
+  }
+
   async function handleSubmit(e) {
-    e.preventDefault(); setCreating(true);
+    e.preventDefault();
+    const err = validateTeacher(form);
+    if (err) return toast(err, "error");
+    setCreating(true);
     try {
       const res = await fetch("/api/teachers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
       if (res.ok) { setShowForm(false); setForm({ name: "", email: "", phone: "+91 ", subjects: [] }); loadAll(); toast("Teacher added"); }
@@ -97,7 +116,10 @@ export default function TeachersPage() {
   }
 
   async function handleEdit(e) {
-    e.preventDefault(); setSaving(true);
+    e.preventDefault();
+    const vErr = validateTeacher(editForm);
+    if (vErr) return toast(vErr, "error");
+    setSaving(true);
     try {
       const res = await fetch(`/api/teachers/${editId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editForm) });
       if (res.ok) { loadAll(); setEditId(null); toast("Teacher updated"); }

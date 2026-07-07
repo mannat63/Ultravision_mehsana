@@ -19,11 +19,13 @@ export async function GET(req) {
 
     const { searchParams } = new URL(req.url);
     const section_id = searchParams.get("section_id");
-
+    const subject_id = searchParams.get("subject_id");
     const risk       = searchParams.get("risk");
     const search     = searchParams.get("search") || "";
     const page       = Math.max(1, parseInt(searchParams.get("page")  || "1"));
-    const limit      = Math.min(200, parseInt(searchParams.get("limit") || "30"));
+    // Normal listing is paginated (≤200/page). Exports pass a high limit to pull every
+    // student in one request — allow up to 20000 so full CSV/PDF exports aren't truncated.
+    const limit      = Math.min(20000, Math.max(1, parseInt(searchParams.get("limit") || "30")));
     const skip       = (page - 1) * limit;
 
     const query = { institute_id: authUser.institute_id };
@@ -47,6 +49,8 @@ export async function GET(req) {
       if (section_id) query.section_id = section_id;
     }
 
+    // ── Subject-wise enrollment filter (only students enrolled in this subject) ──
+    if (subject_id) query.enrolled_subjects = subject_id;
 
     // ── Search: by student name ────────────────────────────────────────
     if (search) {
@@ -114,8 +118,9 @@ export async function GET(req) {
     const [total, students] = await Promise.all([
       Student.countDocuments(query),
       Student.find(query)
-        .select("user_id section_id parent_name parent_phone admission_date institute_id")
+        .select("user_id section_id enrolled_subjects parent_name parent_phone admission_date institute_id")
         .populate("user_id", "name phoneOrEmail")
+        .populate("enrolled_subjects", "name")
         .populate({ path: "section_id", select: "name class_id", populate: { path: "class_id", select: "name" } })
         .sort({ section_id: 1, "user_id.name": 1 })
         .skip(skip)

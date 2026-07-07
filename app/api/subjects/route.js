@@ -28,20 +28,29 @@ export async function POST(req) {
       return NextResponse.json({ error: "Subject name is required" }, { status: 400 });
     }
 
-    data.institute_id = authUser.institute_id;
+    const cleanName = data.name.trim();
 
+    // Escape regex metacharacters so names like "C++" match literally, not as a pattern.
+    const escaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const existing = await Subject.findOne({
       institute_id: authUser.institute_id,
-      name: { $regex: new RegExp(`^${data.name.trim()}$`, "i") },
+      name: { $regex: new RegExp(`^${escaped}$`, "i") },
     });
 
     if (existing) {
-      return NextResponse.json({ error: `Subject "${data.name.trim()}" already exists` }, { status: 409 });
+      return NextResponse.json({ error: `Subject "${cleanName}" already exists` }, { status: 409 });
     }
 
-    data.name = data.name.trim();
-    const newSubject = await Subject.create(data);
-    return NextResponse.json(newSubject, { status: 201 });
+    try {
+      const newSubject = await Subject.create({ name: cleanName, institute_id: authUser.institute_id });
+      return NextResponse.json(newSubject, { status: 201 });
+    } catch (err) {
+      // Unique-index backstop (handles race where two requests pass the check together)
+      if (err.code === 11000) {
+        return NextResponse.json({ error: `Subject "${cleanName}" already exists` }, { status: 409 });
+      }
+      throw err;
+    }
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
