@@ -23,9 +23,13 @@ async function sendToIntellogy(body) {
 }
 
 export async function GET(req) {
-  // Only check for the CRON_SECRET if we are in production (unchanged behaviour).
-  if (process.env.NODE_ENV === 'production') {
-    if (req.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+  // In production, enforce the shared secret ONLY when one is configured.
+  // - CRON_SECRET set  -> require `Authorization: Bearer <secret>` (locked down).
+  // - CRON_SECRET unset -> endpoint stays callable, so a plain-URL scheduler
+  //   (e.g. cron-job.org hitting the URL every 5 min) works with zero auth setup.
+  const cronSecret = process.env.CRON_SECRET;
+  if (process.env.NODE_ENV === 'production' && cronSecret) {
+    if (req.headers.get('Authorization') !== `Bearer ${cronSecret}`) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
   }
