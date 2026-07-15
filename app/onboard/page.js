@@ -56,11 +56,11 @@ export default function OnboardPage() {
         {/* Brand */}
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-md bg-white overflow-hidden flex items-center justify-center border border-gray-200">
-            <img src="/uv_meh_logo.png" alt="Ultra Vision Academy" className="w-full h-full object-contain" />
+            <img src="/intellogy-logo.png" alt="Intellogy Corporation" className="w-full h-full object-contain" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-gray-900 leading-tight">Welcome!</h1>
-            <p className="text-xs text-gray-400 font-medium">Ultra Vision Academy, Mehsana</p>
+            <p className="text-xs text-gray-400 font-medium">Intellogy Corporation</p>
           </div>
         </div>
         

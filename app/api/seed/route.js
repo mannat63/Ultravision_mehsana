@@ -14,6 +14,7 @@ import Test from "@/models/Test";
 import Result from "@/models/Result";
 import Payment from "@/models/Payment";
 import { INSTITUTE_NAME } from "@/config/appConfig";
+import { FEE_FREQUENCIES, cycleMonths, invoiceAmount, periodEnd, midnightUTC } from "@/lib/fees";
 
 export async function POST(req) {
   try {
@@ -67,36 +68,45 @@ export async function POST(req) {
       { name: "Zara Khan", phone: "zara@test.com", parent: "Imran Khan", parentPhone: "+911000000010", section: section12A._id }
     ];
 
+    // Demo billing plans: rotate through all frequencies so the UI shows every plan type.
+    const MONTHLY_RATE = 3000;
     const students = [];
-    for (const s of studentData) {
+    for (let i = 0; i < studentData.length; i++) {
+      const s = studentData[i];
       const admissionDate = new Date();
       admissionDate.setDate(admissionDate.getDate() - Math.floor(Math.random() * 60) - 10); // Between 10 and 70 days ago
-      
+
+      const freq = FEE_FREQUENCIES[i % FEE_FREQUENCIES.length];
       const u = await User.create({ name: s.name, phoneOrEmail: s.phone, role: "STUDENT", institute_id: iid });
-      const doc = await Student.create({ user_id: u._id, section_id: s.section, parent_name: s.parent, parent_phone: s.parentPhone, admission_date: admissionDate, institute_id: iid });
+      const doc = await Student.create({
+        user_id: u._id, section_id: s.section, parent_name: s.parent, parent_phone: s.parentPhone,
+        admission_date: admissionDate, fee_frequency: freq, monthly_fee: MONTHLY_RATE, institute_id: iid,
+      });
       students.push(doc);
     }
 
-    // 5. Fees (A mix of PAID, PARTIAL, DUE)
+    // 5. Fees (A mix of PAID, PARTIAL, DUE), priced per the student's plan.
     for (let i = 0; i < students.length; i++) {
       const student = students[i];
       const admissionDate = new Date(student.admission_date);
-      
-      const dueDate = new Date(admissionDate);
-      dueDate.setDate(dueDate.getDate() + 30); // Fees must be paid within 30 days of admission
 
-      const total = 50000;
+      const start = midnightUTC(admissionDate);
+      const total = invoiceAmount(MONTHLY_RATE, student.fee_frequency);
+
       let paid = 0;
-      if (i % 3 === 0) paid = 50000; // Fully paid
-      else if (i % 3 === 1) paid = 25000; // Partial
-      else paid = 0; // Unpaid
+      if (i % 3 === 0) paid = total;              // Fully paid
+      else if (i % 3 === 1) paid = Math.round(total / 2); // Partial
+      else paid = 0;                              // Unpaid
 
       const f = new Fee({
         student_id: student._id,
         total_amount: total,
         paid_amount: paid,
         due_amount: total - paid,
-        due_date: dueDate,
+        due_date: start,
+        frequency: student.fee_frequency,
+        period_start: start,
+        period_end: periodEnd(start, student.fee_frequency),
         institute_id: iid,
       });
       await f.save();

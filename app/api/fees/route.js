@@ -5,6 +5,14 @@ import Fee from "@/models/Fee";
 import Student from "@/models/Student";
 import Institute from "@/models/Institute";
 import Notification from "@/models/Notification";
+import {
+  generateRecurringFees,
+  normalizeFrequency,
+  invoiceAmount,
+  periodEnd,
+  midnightUTC,
+} from "@/lib/fees";
+import { reportError } from "@/lib/reportError";
 
 export const dynamic = "force-dynamic";
 
@@ -34,61 +42,14 @@ export async function GET(req) {
       if (student_id) query.student_id = student_id;
     }
 
-    // --- AUTO-GENERATE MONTHLY RECURRING FEES ---
+    // --- AUTO-GENERATE RECURRING FEES (plan-aware: monthly/quarterly/half-yearly/yearly) ---
     if (authUser.role === "ADMIN" || authUser.role === "TEACHER") {
-      const allLatestFees = await Fee.aggregate([
-        { $match: { institute_id: authUser.institute_id } },
-        { $sort: { due_date: -1 } },
-        { $group: { _id: "$student_id", latestFee: { $first: "$$ROOT" } } }
-      ]);
-
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
-
-      for (const f of allLatestFees) {
-        let lastDueDate = new Date(f.latestFee.due_date);
-        lastDueDate.setUTCHours(0, 0, 0, 0);
-        let isLatestPaid = f.latestFee.status === "PAID";
-        let iter = 0;
-
-        // Generate next billing cycle ONLY if latest is paid OR cycle is already reached/passed
-        while ((today >= lastDueDate || isLatestPaid) && iter < 12) {
-          lastDueDate.setDate(lastDueDate.getDate() + 30);
-          lastDueDate.setUTCHours(0, 0, 0, 0);
-          
-          try {
-            // Check existence one last time before creating
-            const exists = await Fee.findOne({
-              student_id: f._id,
-              institute_id: authUser.institute_id,
-              due_date: lastDueDate
-            }).lean();
-
-            if (!exists) {
-              await Fee.create({
-                student_id: f._id,
-                total_amount: f.latestFee.total_amount,
-                paid_amount: 0,
-                due_amount: f.latestFee.total_amount,
-                due_date: new Date(lastDueDate),
-                status: "DUE",
-                institute_id: authUser.institute_id,
-              });
-            }
-          } catch (dupErr) {
-            // Expected if concurrent requests hit the unique index
-            console.log("Duplicate fee prevented by DB index.");
-          }
-          
-          isLatestPaid = false; 
-          iter++;
-        }
-      }
+      await generateRecurringFees(authUser.institute_id, { Fee, Student });
     }
     // ---------------------------------------------
 
     const fees = await Fee.find(query)
-      .select("student_id total_amount paid_amount due_amount due_date status")
+      .select("student_id total_amount paid_amount due_amount due_date status frequency period_start period_end")
       .populate({
         path: "student_id",
         select: "parent_name parent_phone user_id",
@@ -100,6 +61,7 @@ export async function GET(req) {
     return NextResponse.json(fees);
   } catch (error) {
     console.error("Fees GET error:", error);
+    await reportError({ source: "api/fees GET", error });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -110,15 +72,35 @@ export async function POST(req) {
     const authUser = await requireRole(["ADMIN"]);
 
     const body = await req.json();
-    const { student_id, total_amount, due_date } = body;
+    const { student_id, monthly_fee, fee_frequency, due_date } = body;
+    // Backward-compat: some callers may still send a raw per-invoice `total_amount`.
+    const rawTotal = body.total_amount;
+
+    const freq = normalizeFrequency(fee_frequency);
+    const start = midnightUTC(due_date || new Date());
+
+    // Persist the plan on the student so future invoices auto-generate correctly.
+    const monthlyRate = Number(monthly_fee);
+    if (student_id && (Number.isFinite(monthlyRate) || fee_frequency)) {
+      const update = { fee_frequency: freq };
+      if (Number.isFinite(monthlyRate)) update.monthly_fee = monthlyRate;
+      await Student.findByIdAndUpdate(student_id, update);
+    }
+
+    const total = rawTotal !== undefined && rawTotal !== null && rawTotal !== ""
+      ? Number(rawTotal) || 0
+      : invoiceAmount(monthlyRate, freq);
 
     const fee = await Fee.create({
       student_id,
-      total_amount,
+      total_amount: total,
       paid_amount: 0,
-      due_amount: total_amount,
-      due_date,
+      due_amount: total,
+      due_date: start,
       status: "DUE",
+      frequency: freq,
+      period_start: start,
+      period_end: periodEnd(start, freq),
       institute_id: authUser.institute_id,
     });
 
@@ -152,6 +134,7 @@ export async function POST(req) {
     return NextResponse.json(fee, { status: 201 });
   } catch (error) {
     console.error("Fees POST error:", error);
+    await reportError({ source: "api/fees POST", error });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

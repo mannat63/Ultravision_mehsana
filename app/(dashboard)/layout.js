@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import dbConnect from "@/lib/db/mongodb";
 import { getAuthUser } from "@/lib/auth";
 import DashboardLayoutClient from "@/components/DashboardLayoutClient";
+import AnalyticsHeartbeat from "@/components/AnalyticsHeartbeat";
 
 export default async function DashboardGroupLayout({ children }) {
   const { userId } = await auth();
@@ -12,6 +13,8 @@ export default async function DashboardGroupLayout({ children }) {
 
   return (
     <DashboardLayoutClient role={user.role} userName={user.name}>
+      {/* Localhost fallback that auto-pushes analytics to Intellogy OS (admins only). */}
+      {user.role === "ADMIN" && <AnalyticsHeartbeat />}
       {children}
     </DashboardLayoutClient>
   );

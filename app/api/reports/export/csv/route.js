@@ -20,7 +20,7 @@ export async function GET(req) {
         status: 200,
         headers: {
             "Content-Type": "text/csv",
-            "Content-Disposition": `attachment; filename="UltraVision_Report_${new Date().toISOString().split('T')[0]}.csv"`
+            "Content-Disposition": `attachment; filename="Intellogy_Report_${new Date().toISOString().split('T')[0]}.csv"`
         }
     });
   } catch (error) {

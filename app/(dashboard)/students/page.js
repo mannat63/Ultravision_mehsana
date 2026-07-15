@@ -83,7 +83,7 @@ export default function StudentsPage() {
 
   const [modalOpen, setModalOpen]   = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
-  const [form, setForm] = useState({ name: "", email: "", student_phone: "+91 ", class_id: "", section_id: "", parent_name: "", parent_phone: "+91 ", admission_date: "", total_fee: "", due_date: "" });
+  const [form, setForm] = useState({ name: "", email: "+91 ", student_phone: "+91 ", class_id: "", section_id: "", parent_name: "", parent_phone: "+91 ", admission_date: "", monthly_fee: "", fee_frequency: "MONTHLY", due_date: "" });
   const [submitting, setSubmitting] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -160,7 +160,7 @@ export default function StudentsPage() {
 
   function openAdd() {
     setEditingStudent(null);
-    setForm({ name: "", email: "", student_phone: "+91 ", class_id: "", section_id: "", parent_name: "", parent_phone: "+91 ", admission_date: "", total_fee: "", due_date: "" });
+    setForm({ name: "", email: "+91 ", student_phone: "+91 ", class_id: "", section_id: "", parent_name: "", parent_phone: "+91 ", admission_date: "", monthly_fee: "", fee_frequency: "MONTHLY", due_date: "" });
     setModalOpen(true);
   }
   function openEdit(s) {
@@ -176,7 +176,8 @@ export default function StudentsPage() {
       parent_name: s.parent_name || "",
       parent_phone: s.parent_phone || "+91 ",
       admission_date: s.admission_date ? new Date(s.admission_date).toLocaleDateString("en-CA") : "",
-      total_fee: s.total_fee ? String(s.total_fee) : "",
+      monthly_fee: s.monthly_fee ? String(s.monthly_fee) : "",
+      fee_frequency: s.fee_frequency || "MONTHLY",
       due_date: s.fee_due_date ? new Date(s.fee_due_date).toLocaleDateString("en-CA") : "",
     });
     setModalOpen(true);
@@ -196,7 +197,7 @@ export default function StudentsPage() {
     if (pp && pp !== "+91" && pp !== "+91 " && !/^\+91\s?\d{10}$/.test(pp)) {
       return toast("Parent phone must be 10 digits with +91 prefix (e.g. +91 9876543210)", "error");
     }
-    if (form.total_fee !== "" && form.total_fee != null && Number(form.total_fee) < 0) {
+    if (form.monthly_fee !== "" && form.monthly_fee != null && Number(form.monthly_fee) < 0) {
       return toast("Fee amount cannot be negative", "error");
     }
 
@@ -600,18 +601,33 @@ export default function StudentsPage() {
             </div>
             <div>
               {editingStudent && (
-                <p className="text-[11px] text-gray-400 mb-1.5">Editing updates this student's latest fee cycle. Leave amount unchanged to keep it as-is.</p>
+                <p className="text-[11px] text-gray-400 mb-1.5">Editing updates this student's billing plan and latest fee cycle. Leave amount unchanged to keep it as-is.</p>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">{editingStudent ? "Fee Amount (₹)" : "Course Fee (₹)"}</label>
-                  <input type="number" required={!editingStudent} value={form.total_fee} onChange={(e) => setForm({ ...form, total_fee: e.target.value })} className="input-field" placeholder="e.g. 45000" />
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Monthly Fee (₹)</label>
+                  <input type="number" min="0" required={!editingStudent} value={form.monthly_fee} onChange={(e) => setForm({ ...form, monthly_fee: e.target.value })} className="input-field" placeholder="e.g. 3000" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Fee Due Date</label>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Billing Frequency</label>
+                  <select value={form.fee_frequency} onChange={(e) => setForm({ ...form, fee_frequency: e.target.value })} className="input-field">
+                    <option value="MONTHLY">Monthly</option>
+                    <option value="QUARTERLY">Quarterly (3 mo)</option>
+                    <option value="HALF_YEARLY">Half-Yearly (6 mo)</option>
+                    <option value="YEARLY">Yearly (12 mo)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">First Due Date</label>
                   <input type="date" required={!editingStudent} value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="input-field" />
                 </div>
               </div>
+              {form.monthly_fee !== "" && Number(form.monthly_fee) > 0 && (
+                <p className="text-[11px] text-slate-500 mt-2">
+                  Each invoice charges <span className="font-bold text-slate-700">₹{(Number(form.monthly_fee) * ({ MONTHLY: 1, QUARTERLY: 3, HALF_YEARLY: 6, YEARLY: 12 }[form.fee_frequency] || 1)).toLocaleString()}</span>
+                  {" "}every {({ MONTHLY: "month", QUARTERLY: "3 months", HALF_YEARLY: "6 months", YEARLY: "year" }[form.fee_frequency] || "month")}.
+                </p>
+              )}
             </div>
           </div>
           <div className="modal-footer">

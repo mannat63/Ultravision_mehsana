@@ -9,6 +9,8 @@ import Attendance from "@/models/Attendance";
 import Result from "@/models/Result";
 import mongoose from "mongoose";
 import { logActivity } from "@/lib/logActivity";
+import { normalizeFrequency, invoiceAmount, periodEnd, midnightUTC } from "@/lib/fees";
+import { reportError } from "@/lib/reportError";
 
 export const dynamic = "force-dynamic";
 
@@ -118,9 +120,9 @@ export async function GET(req) {
     const [total, students] = await Promise.all([
       Student.countDocuments(query),
       Student.find(query)
-        .select("user_id section_id enrolled_subjects parent_name parent_phone admission_date institute_id")
+        .select("user_id section_id enrolled_subjects parent_name parent_phone admission_date fee_frequency monthly_fee institute_id")
         .populate("user_id", "name phoneOrEmail")
-        .populate("enrolled_subjects", "name")
+        .populate({ path: "enrolled_subjects", select: "name", strictPopulate: false })
         .populate({ path: "section_id", select: "name class_id", populate: { path: "class_id", select: "name" } })
         .sort({ section_id: 1, "user_id.name": 1 })
         .skip(skip)
@@ -169,6 +171,8 @@ export async function GET(req) {
     const enriched = students.map(s => ({
       ...s,
       total_fee:             feeMap[s._id.toString()]?.total_amount  ?? 0,
+      monthly_fee:           s.monthly_fee                           ?? 0,
+      fee_frequency:         s.fee_frequency                         ?? "MONTHLY",
       paid_fee:              feeMap[s._id.toString()]?.paid_amount   ?? 0,
       due_fee:               feeMap[s._id.toString()]?.due_amount    ?? 0,
       fee_status:            feeMap[s._id.toString()]?.status        ?? "UNKNOWN",
@@ -181,6 +185,7 @@ export async function GET(req) {
     return NextResponse.json({ students: enriched, total, page, pages: Math.ceil(total / limit) });
   } catch (error) {
     console.error("Students GET error:", error);
+    await reportError({ source: "api/students GET", error });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -190,7 +195,11 @@ export async function POST(req) {
     await dbConnect();
     const authUser = await requireRole(["ADMIN"]);
 
-    const { name, phoneOrEmail, section_id, parent_name, parent_phone, admission_date, total_fee, due_date } = await req.json();
+    const body = await req.json();
+    const { name, phoneOrEmail, section_id, parent_name, parent_phone, admission_date, due_date } = body;
+    // `monthly_fee` is the base monthly rate; `total_fee` kept for backward-compat (CSV import).
+    const monthlyRate = body.monthly_fee !== undefined ? body.monthly_fee : body.total_fee;
+    const fee_frequency = normalizeFrequency(body.fee_frequency);
 
     if (!phoneOrEmail || !phoneOrEmail.trim()) {
       return NextResponse.json({ error: "Email or phone is required" }, { status: 400 });
@@ -208,7 +217,9 @@ export async function POST(req) {
         return NextResponse.json({ error: "Parent phone must be exactly 10 digits with +91 prefix (e.g., +91 9876543210)" }, { status: 400 });
       }
     }
-    let user = await User.findOne({ phoneOrEmail: new RegExp(`^${trimmed}$`, "i") });
+    // Escape regex metacharacters (a "+91 …" phone contains `+`, which is an invalid quantifier).
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    let user = await User.findOne({ phoneOrEmail: new RegExp(`^${escaped}$`, "i") });
     if (!user) {
       user = await User.create({ name, phoneOrEmail: trimmed, role: "STUDENT", institute_id: authUser.institute_id });
     } else if (!["STUDENT", "ADMIN", "TEACHER"].includes(user.role)) {
@@ -219,17 +230,24 @@ export async function POST(req) {
     const student = await Student.create({
       user_id: user._id, section_id, parent_name, parent_phone,
       admission_date: admission_date ? new Date(admission_date) : new Date(),
+      fee_frequency,
+      monthly_fee: Number(monthlyRate) || 0,
       institute_id: authUser.institute_id,
     });
 
-    if (total_fee !== undefined && total_fee !== "") {
+    if (monthlyRate !== undefined && monthlyRate !== "" && monthlyRate !== null) {
+      const start = midnightUTC(due_date || new Date());
+      const total = invoiceAmount(monthlyRate, fee_frequency);
       await Fee.create({
         student_id: student._id,
-        total_amount: Number(total_fee) || 0,
-        due_amount:   Number(total_fee) || 0,
+        total_amount: total,
+        due_amount:   total,
         paid_amount:  0,
-        due_date:     due_date ? new Date(due_date) : new Date(),
+        due_date:     start,
         status: "DUE",
+        frequency: fee_frequency,
+        period_start: start,
+        period_end: periodEnd(start, fee_frequency),
         institute_id: authUser.institute_id,
       });
     }
@@ -247,6 +265,7 @@ export async function POST(req) {
     return NextResponse.json(student, { status: 201 });
   } catch (error) {
     console.error("Students POST error:", error);
+    await reportError({ source: "api/students POST", error });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

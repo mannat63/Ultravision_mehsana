@@ -76,11 +76,11 @@ export default function LoginClient() {
         {/* Brand */}
         <div className="login-left-brand">
           <div className="login-left-logo">
-            <img src="/uv_meh_logo.png" alt="Ultra Vision Academy" />
+            <img src="/intellogy-logo.png" alt="Intellogy Corporation" />
           </div>
           <div className="login-left-text">
-            <div className="login-left-name">Ultra Vision Academy</div>
-            <div className="login-left-sub">Mehsana</div>
+            <div className="login-left-name">Intellogy Corporation</div>
+            <div className="login-left-sub">Corporation</div>
           </div>
         </div>
 
@@ -88,7 +88,7 @@ export default function LoginClient() {
         <div className="login-hero-content">
           <div className="login-hero-badge">
             <span className="login-badge-dot" />
-            Welcome to Ultra Vision Academy
+            Welcome to Intellogy Corporation
           </div>
 
           <h1 className="login-hero-title">
@@ -96,7 +96,7 @@ export default function LoginClient() {
           </h1>
 
           <p className="login-hero-subtitle">
-            Empowering students with world-class education and personalized academic tracking at Ultra Vision Academy, Mehsana.
+            Empowering students with world-class education and personalized academic tracking at Intellogy Corporation.
           </p>
 
           {/* Feature list */}
@@ -119,24 +119,24 @@ export default function LoginClient() {
         {/* Mobile top branding */}
         <div className="login-mobile-top-brand">
           <div className="login-mobile-top-logo">
-            <img src="/uv_meh_logo.png" alt="Ultra Vision Academy" />
+            <img src="/intellogy-logo.png" alt="Intellogy Corporation" />
           </div>
           <div>
-            <div className="login-mobile-top-name">Ultra Vision Academy</div>
-            <div className="login-mobile-top-sub">Mehsana</div>
+            <div className="login-mobile-top-name">Intellogy Corporation</div>
+            <div className="login-mobile-top-sub">Corporation</div>
           </div>
         </div>
 
         <div className="login-card">
           {/* Welcome text */}
           <div className="login-welcome-tag">
-            Ultra Vision Academy Portal
+            Intellogy Corporation Portal
           </div>
 
           {/* Logo Section instead of rotating avatars */}
           <div className="login-avatar-section">
             <div className="login-logo-showcase">
-              <img src="/uv_meh_logo.png" alt="Ultra Vision Academy" className="login-showcase-logo" />
+              <img src="/intellogy-logo.png" alt="Intellogy Corporation" className="login-showcase-logo" />
             </div>
             <div className="login-role-name">Welcome Back</div>
             <p className="login-role-desc">
@@ -184,7 +184,7 @@ export default function LoginClient() {
 
         {/* Footer */}
         <div className="login-footer">
-          <span>&copy; {new Date().getFullYear()} Ultra Vision Academy, Mehsana</span>
+          <span>&copy; {new Date().getFullYear()} Intellogy Corporation</span>
           <span className="login-footer-dot">&middot;</span>
           <span>Privacy Policy</span>
           <span className="login-footer-dot">&middot;</span>

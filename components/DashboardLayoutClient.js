@@ -159,7 +159,7 @@ export default function DashboardLayoutClient({ children, role, userName }) {
           <div className="flex items-center gap-3 pointer-events-auto">
             {/* Mobile logo */}
             <div className="w-8 h-8 rounded-xl bg-white overflow-hidden border border-gray-100 shadow-sm flex items-center justify-center md:hidden">
-              <img src="/uv_meh_logo.png" alt="Ultra Vision" className="w-6 h-6 object-contain" />
+              <img src="/intellogy-logo.png" alt="Intellogy" className="w-6 h-6 object-contain" />
             </div>
             <h1 className="text-2xl md:text-[32px] leading-none font-extrabold text-gray-900 tracking-tight">{currentPageLabel}</h1>
           </div>

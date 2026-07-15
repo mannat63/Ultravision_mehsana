@@ -115,28 +115,36 @@ export async function POST(req) {
           institute_id: authUser.institute_id
         });
 
+        // CSV imports default to a MONTHLY plan; total_fee is treated as the monthly rate.
+        const parsedFee = total_fee !== undefined && total_fee !== null ? parseFloat(total_fee) : NaN;
+        const monthlyRate = !isNaN(parsedFee) && parsedFee >= 0 ? parsedFee : 0;
+
         const student = await Student.create({
           user_id: user._id,
           section_id: bId,
           parent_name: "Parent of " + name, // Since format only gives phone, we infer parent name or use student name
           parent_phone,
           admission_date,
+          fee_frequency: "MONTHLY",
+          monthly_fee: monthlyRate,
           institute_id: authUser.institute_id
         });
 
-        if (total_fee !== undefined && total_fee !== null) {
-          const parsedFee = parseFloat(total_fee);
-          if (!isNaN(parsedFee) && parsedFee >= 0) {
-            await Fee.create({
-              student_id: student._id,
-              total_amount: parsedFee,
-              paid_amount: 0,
-              due_amount: parsedFee,
-              due_date: admission_date,
-              status: "DUE",
-              institute_id: authUser.institute_id
-            });
-          }
+        if (monthlyRate > 0) {
+          const start = new Date(admission_date);
+          start.setUTCHours(0, 0, 0, 0);
+          await Fee.create({
+            student_id: student._id,
+            total_amount: monthlyRate,
+            paid_amount: 0,
+            due_amount: monthlyRate,
+            due_date: start,
+            status: "DUE",
+            frequency: "MONTHLY",
+            period_start: start,
+            period_end: new Date(new Date(start).setUTCMonth(start.getUTCMonth() + 1) - 24 * 60 * 60 * 1000),
+            institute_id: authUser.institute_id
+          });
         }
 
         imported++;

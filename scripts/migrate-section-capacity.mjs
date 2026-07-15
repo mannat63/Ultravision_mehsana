@@ -2,8 +2,11 @@
 // Run with: node scripts/migrate-section-capacity.mjs
 
 import mongoose from "mongoose";
+import dotenv from "dotenv";
+dotenv.config({ path: ".env.local" });
 
-const MONGODB_URI = "mongodb+srv://new_db_user:test123@cluster0.h8qjgpf.mongodb.net/coaching_one?appName=Cluster0";
+const MONGODB_URI = process.env.MONGODB_URI;
+if (!MONGODB_URI) throw new Error("MONGODB_URI is not set (add it to .env.local)");
 
 await mongoose.connect(MONGODB_URI);
 

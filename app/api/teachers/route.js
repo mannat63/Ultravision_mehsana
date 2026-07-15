@@ -40,7 +40,9 @@ export async function POST(req) {
 
     const finalContact = email?.trim() ? email.trim() : phone?.trim();
 
-    let user = await User.findOne({ phoneOrEmail: new RegExp(`^${finalContact}$`, "i") });
+    // Escape regex metacharacters (a "+91 …" phone contains `+`, an invalid quantifier).
+    const escapedContact = (finalContact || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    let user = await User.findOne({ phoneOrEmail: new RegExp(`^${escapedContact}$`, "i") });
     if (user) {
       if (user.role !== "TEACHER" && user.role !== "ADMIN") {
         user.role = "TEACHER";

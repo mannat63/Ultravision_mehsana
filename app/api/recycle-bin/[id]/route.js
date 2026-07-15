@@ -66,6 +66,16 @@ export async function POST(req, { params }) {
           }
         }
       }
+      // Restore payment history too (was captured on delete but previously dropped on restore)
+      if (payments?.length) {
+        for (const pmt of payments) {
+          const existingPmt = await Payment.findById(pmt._id);
+          if (!existingPmt) {
+            const { _id, __v, ...pmtFields } = pmt;
+            await Payment.create({ _id: pmt._id, ...pmtFields });
+          }
+        }
+      }
     } else if (original_collection === "Teacher") {
       const { teacher, user } = data;
       let restoredUser = await User.findById(user?._id);

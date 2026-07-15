@@ -335,10 +335,14 @@ export default function ClassesAndSectionsPage() {
                       (s) => (s.section_id?._id || s.section_id) === sec._id
                     ).length;
 
+                    const cap = sec.capacity || 30;
+                    const fillPct = Math.min(100, Math.round((secCount / cap) * 100));
+                    const nearFull = fillPct >= 100;
+
                     return (
                       <div
                         key={sec._id}
-                        className="relative group border border-gray-100 rounded-2xl bg-white hover:border-slate-300 hover:shadow-sm transition-all flex flex-col items-center justify-center py-3 min-h-[70px]"
+                        className="relative group border border-gray-200 rounded-xl bg-white hover:border-slate-300 hover:shadow-sm transition-all flex flex-col justify-center px-3 py-2.5 min-h-[64px]"
                       >
                         {editSectionId === sec._id ? (
                           <form onSubmit={(e) => handleEditSectionSave(e, sec._id)} className="flex flex-col gap-1.5 w-full px-2">
@@ -371,23 +375,34 @@ export default function ClassesAndSectionsPage() {
                           </form>
                         ) : (
                           <>
-                            <span className="text-lg font-black text-slate-800 leading-none">{sec.name}</span>
-                            <span className="text-[10px] text-gray-400 font-medium mt-0.5 leading-none">{secCount} / {sec.capacity || 30} seats</span>
+                            <div className="flex items-baseline justify-between gap-1">
+                              <span className="text-sm font-semibold text-slate-700 leading-none truncate">{sec.name}</span>
+                              <span className="text-[10px] font-semibold text-slate-400 tabular-nums shrink-0">{secCount}/{cap}</span>
+                            </div>
+                            <div className="mt-2 h-1 w-full rounded-full bg-slate-100 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${nearFull ? "bg-red-400" : fillPct >= 75 ? "bg-amber-400" : "bg-emerald-400"}`}
+                                style={{ width: `${Math.max(fillPct, 3)}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-gray-400 font-medium mt-1.5 leading-none">
+                              {secCount === cap ? "Full" : `${cap - secCount} seat${cap - secCount !== 1 ? "s" : ""} left`}
+                            </span>
 
                             {role === "ADMIN" && (
-                              <div className="absolute inset-0 rounded-lg flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all bg-gray-900/5 backdrop-blur-[1px]">
+                              <div className="absolute inset-0 rounded-xl flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/70 backdrop-blur-[1px]">
                                 <button
                                   onClick={() => { setEditSectionId(sec._id); setEditSectionForm({ name: sec.name, capacity: sec.capacity || 30 }); }}
-                                  className="p-1.5 rounded-md bg-white shadow border border-gray-200 text-gray-400 hover:text-blue-600 transition-colors"
+                                  className="p-1.5 rounded-md bg-white shadow-sm border border-gray-200 text-gray-500 hover:text-blue-600 transition-colors"
                                 >
-                                  <Pencil size={11} />
+                                  <Pencil size={12} />
                                 </button>
                                 <button
                                   onClick={() => handleDeleteSection(sec._id)}
                                   disabled={deletingSectionId === sec._id}
-                                  className="p-1.5 rounded-md bg-white shadow border border-gray-200 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-40"
+                                  className="p-1.5 rounded-md bg-white shadow-sm border border-gray-200 text-gray-500 hover:text-red-500 transition-colors disabled:opacity-40"
                                 >
-                                  <Trash2 size={11} />
+                                  <Trash2 size={12} />
                                 </button>
                               </div>
                             )}

@@ -3,8 +3,8 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { Analytics } from "@vercel/analytics/react";
 
 export const metadata = {
-  title: "Ultra Vision Academy Mehsana | Academic Excellence",
-  description: "A modern management platform for Ultra Vision Academy Mehsana. Track students, fees, attendance, and results with ease.",
+  title: "Intellogy Corporation | Academic Excellence",
+  description: "A modern management platform for Intellogy Corporation. Track students, fees, attendance, and results with ease.",
 };
 
 export default function RootLayout({ children }) {

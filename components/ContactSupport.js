@@ -76,7 +76,7 @@ export default function ContactSupport() {
 
           {/* Footer */}
           <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
-            <p className="text-[10px] text-gray-400 text-center font-medium">Ultra Vision Academy • Mehsana</p>
+            <p className="text-[10px] text-gray-400 text-center font-medium">Intellogy Corporation</p>
           </div>
         </div>
       )}

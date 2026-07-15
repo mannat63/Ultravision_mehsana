@@ -10,6 +10,8 @@ import Result from "@/models/Result";
 import Test from "@/models/Test";
 import RecycleBin from "@/models/RecycleBin";
 import { logActivity } from "@/lib/logActivity";
+import { normalizeFrequency, invoiceAmount, periodEnd, midnightUTC } from "@/lib/fees";
+import { reportError } from "@/lib/reportError";
 import mongoose from "mongoose";
 
 export const dynamic = "force-dynamic";
@@ -99,6 +101,7 @@ export async function GET(req, { params }) {
     });
   } catch (error) {
     console.error("Student GET error:", error);
+    await reportError({ source: "api/students/[id] GET", error });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -108,7 +111,11 @@ export async function PUT(req, { params }) {
     await dbConnect();
     const authUser = await requireRole(["ADMIN"]);
     const { id } = await params;
-    const { name, phoneOrEmail, section_id, parent_name, parent_phone, admission_date, total_fee, due_date } = await req.json();
+    const body = await req.json();
+    const { name, phoneOrEmail, section_id, parent_name, parent_phone, admission_date, due_date } = body;
+    const monthlyRate = body.monthly_fee !== undefined ? body.monthly_fee : body.total_fee;
+    const hasFreq = body.fee_frequency !== undefined;
+    const fee_frequency = normalizeFrequency(body.fee_frequency);
 
     if (phoneOrEmail) {
       const trimmed = phoneOrEmail.trim();
@@ -135,28 +142,59 @@ export async function PUT(req, { params }) {
     student.parent_phone = parent_phone;
 
     if (admission_date) student.admission_date = new Date(admission_date);
+
+    // ── Billing plan: update frequency + monthly rate on the student ──
+    const prevFreq = normalizeFrequency(student.fee_frequency);
+    const freq = hasFreq ? fee_frequency : prevFreq;
+    if (hasFreq) student.fee_frequency = freq;
+    const hasRate = monthlyRate !== undefined && monthlyRate !== null && monthlyRate !== "";
+    if (hasRate) student.monthly_fee = Number(monthlyRate) || 0;
     await student.save();
 
-    // ── Editable fees: update the student's latest fee record (or create one) ──
-    if (total_fee !== undefined && total_fee !== null && total_fee !== "") {
-      const amount = Number(total_fee) || 0;
-      const latestFee = await Fee.findOne({ student_id: student._id }).sort({ due_date: -1 });
+    // ── Re-price the latest invoice, carefully ──────────────────────────────────
+    // Only re-price when we have a positive monthly rate to price from AND the admin
+    // actually changed something pricing-relevant (entered a rate, or changed frequency).
+    // This protects legacy records that store a direct per-invoice total (monthly_fee = 0):
+    // editing an unrelated field (name/section) must never zero out their fee.
+    const freqChanged = hasFreq && freq !== prevFreq;
+    const canPrice = (student.monthly_fee || 0) > 0;
+    const latestFee = await Fee.findOne({ student_id: student._id }).sort({ due_date: -1 });
+
+    if ((hasRate || freqChanged) && canPrice) {
+      const amount = invoiceAmount(student.monthly_fee, freq);
       if (latestFee) {
         latestFee.total_amount = amount;
-        if (due_date) latestFee.due_date = new Date(due_date);
+        latestFee.frequency = freq;
+        if (due_date) {
+          const start = midnightUTC(due_date);
+          latestFee.due_date = start;
+          latestFee.period_start = start;
+          latestFee.period_end = periodEnd(start, freq);
+        }
         // pre-save hook recomputes due_amount & status from total_amount - paid_amount
         await latestFee.save();
       } else {
+        const start = midnightUTC(due_date || new Date());
         await Fee.create({
           student_id: student._id,
           total_amount: amount,
           paid_amount: 0,
           due_amount: amount,
-          due_date: due_date ? new Date(due_date) : new Date(),
+          due_date: start,
           status: "DUE",
+          frequency: freq,
+          period_start: start,
+          period_end: periodEnd(start, freq),
           institute_id: authUser.institute_id,
         });
       }
+    } else if (due_date && latestFee) {
+      // Date-only change: move the due date without touching the amount.
+      const start = midnightUTC(due_date);
+      latestFee.due_date = start;
+      latestFee.period_start = start;
+      latestFee.period_end = periodEnd(start, freq);
+      await latestFee.save();
     }
 
     await logActivity({
@@ -171,6 +209,8 @@ export async function PUT(req, { params }) {
 
     return NextResponse.json(student);
   } catch (error) {
+    console.error("Student PUT error:", error);
+    await reportError({ source: "api/students/[id] PUT", error });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

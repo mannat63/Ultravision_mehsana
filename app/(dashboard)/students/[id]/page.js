@@ -228,8 +228,20 @@ export default function StudentProfilePage() {
         <div className="space-y-4">
           {fee ? (
             <>
+              <div className="card !py-3 !px-4 flex items-center justify-between bg-slate-50 border border-slate-100">
+                <div>
+                  <div className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Billing Plan</div>
+                  <div className="text-sm font-bold text-slate-700">
+                    {({ MONTHLY: "Monthly", QUARTERLY: "Quarterly", HALF_YEARLY: "Half-Yearly", YEARLY: "Yearly" }[student?.fee_frequency] || "Monthly")}
+                    {student?.monthly_fee ? <span className="text-gray-400 font-medium"> · ₹{Number(student.monthly_fee).toLocaleString()}/month</span> : null}
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-md text-xs font-bold text-slate-600">
+                  ₹{(fee.total_amount || 0).toLocaleString()} / invoice
+                </span>
+              </div>
               <div className="grid grid-cols-3 gap-4">
-                <StatCard label="Total Fee" value={`₹${(fee.total_amount || 0).toLocaleString()}`} />
+                <StatCard label="Invoice Total" value={`₹${(fee.total_amount || 0).toLocaleString()}`} />
                 <StatCard label="Paid" value={`₹${(fee.paid_amount || 0).toLocaleString()}`} color="text-emerald-600" />
                 <StatCard label="Due" value={`₹${(fee.due_amount || 0).toLocaleString()}`} color={(fee.due_amount || 0) > 0 ? "text-red-600" : "text-emerald-600"} sub={fee.status} />
               </div>

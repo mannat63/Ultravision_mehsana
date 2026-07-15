@@ -4,57 +4,16 @@ import { requireRole } from "@/lib/auth";
 import Fee from "@/models/Fee";
 import Student from "@/models/Student";
 import User from "@/models/User";
+import { generateRecurringFees } from "@/lib/fees";
+import { reportError } from "@/lib/reportError";
 
 export async function GET(req) {
   try {
     await dbConnect();
     const authUser = await requireRole(["ADMIN"]);
 
-    // --- AUTO-GENERATE MONTHLY RECURRING FEES ---
-    const allLatestFees = await Fee.aggregate([
-      { $match: { institute_id: authUser.institute_id } },
-      { $sort: { due_date: -1 } },
-      { $group: { _id: "$student_id", latestFee: { $first: "$$ROOT" } } }
-    ]);
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-
-    for (const f of allLatestFees) {
-      let lastDueDate = new Date(f.latestFee.due_date);
-      lastDueDate.setUTCHours(0, 0, 0, 0);
-      let isLatestPaid = f.latestFee.status === "PAID";
-      let iter = 0;
-
-      while ((today >= lastDueDate || isLatestPaid) && iter < 12) {
-        lastDueDate.setDate(lastDueDate.getDate() + 30);
-        lastDueDate.setUTCHours(0, 0, 0, 0);
-
-        try {
-          const exists = await Fee.findOne({
-            student_id: f._id,
-            institute_id: authUser.institute_id,
-            due_date: lastDueDate
-          }).lean();
-
-          if (!exists) {
-            await Fee.create({
-              student_id: f._id,
-              total_amount: f.latestFee.total_amount,
-              paid_amount: 0,
-              due_amount: f.latestFee.total_amount,
-              due_date: new Date(lastDueDate),
-              status: "DUE",
-              institute_id: authUser.institute_id,
-            });
-          }
-        } catch (err) {
-          console.log("Duplicate fee prevented in Defaulters API.");
-        }
-        isLatestPaid = false;
-        iter++;
-      }
-    }
-    // ---------------------------------------------
+    // Auto-generate any missing recurring invoices (plan-aware) before listing defaulters.
+    await generateRecurringFees(authUser.institute_id, { Fee, Student });
 
     // Find all fees that are not PAID
     const overdueFees = await Fee.find({ 
@@ -103,6 +62,7 @@ export async function GET(req) {
     return NextResponse.json(defaulters);
   } catch (error) {
     console.error("Defaulters API Error:", error);
+    await reportError({ source: "api/defaulters GET", error });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

@@ -8,6 +8,17 @@ const FeeSchema = new mongoose.Schema(
     due_amount: { type: Number, required: true },
     due_date: { type: Date, required: true },
     status: { type: String, enum: ["PAID", "PARTIAL", "DUE"], default: "DUE" },
+
+    // Billing frequency this invoice was raised under, plus the period it covers.
+    // Lets the UI show "Q1 · Jan–Mar 2026" instead of a bare month number.
+    frequency: {
+      type: String,
+      enum: ["MONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY"],
+      default: "MONTHLY",
+    },
+    period_start: { type: Date },
+    period_end: { type: Date },
+
     institute_id: { type: mongoose.Schema.Types.ObjectId, ref: "Institute", required: true },
   },
   { timestamps: true }

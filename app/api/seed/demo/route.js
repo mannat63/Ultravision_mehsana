@@ -30,6 +30,8 @@ import Homework from "@/models/Homework";
 import Lead from "@/models/Lead";
 import Subject from "@/models/Subject";
 import TimetableEntry from "@/models/TimetableEntry";
+import { FEE_FREQUENCIES, invoiceAmount, periodEnd } from "@/lib/fees";
+import { reportError } from "@/lib/reportError";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 min timeout
@@ -293,9 +295,19 @@ export async function POST() {
 
     const userDocs = await User.insertMany(userInsertDocs, { ordered: false });
 
-    // Build studentInsert using user _ids
-    for (const row of studentRows) {
+    // Per-batch annual fee → base monthly rate for the billing plan.
+    const FEE_BY_BATCH = {
+      [jee11A._id.toString()]: 75000, [jee11B._id.toString()]: 75000,
+      [jee12A._id.toString()]: 80000, [jee12B._id.toString()]: 80000,
+      [neet11._id.toString()]: 70000, [found._id.toString()]: 45000,
+    };
+
+    // Build studentInsert using user _ids. Each student gets a billing plan
+    // (rotating through all frequencies so the demo showcases every plan type).
+    for (let sIdx = 0; sIdx < studentRows.length; sIdx++) {
+      const row = studentRows[sIdx];
       const u = userInsertDocs[row.userDocIdx];
+      const annual = FEE_BY_BATCH[row.secId.toString()] || 60000;
       studentInsertDocs.push({
         _id:          new mongoose.Types.ObjectId(),
         user_id:      u._id,
@@ -303,6 +315,8 @@ export async function POST() {
         parent_name:  row.parentName,
         parent_phone: `+91${rnd(70,99)}${String(rnd(10000000,99999999)).padStart(8,"0")}`,
         admission_date: row.admDate,
+        fee_frequency: FEE_FREQUENCIES[sIdx % FEE_FREQUENCIES.length],
+        monthly_fee:  Math.round(annual / 12),
         institute_id: iid,
         createdAt:    row.admDate,
         updatedAt:    row.admDate,
@@ -315,12 +329,6 @@ export async function POST() {
 
     // ── FEES ─────────────────────────────────────────────────────────────────
     tag("Creating fee records...");
-    const FEE_BY_BATCH = {
-      [jee11A._id.toString()]: 75000, [jee11B._id.toString()]: 75000,
-      [jee12A._id.toString()]: 80000, [jee12B._id.toString()]: 80000,
-      [neet11._id.toString()]: 70000, [found._id.toString()]: 45000,
-    };
-
     const feeDocs = [];
     const paymentDocs = [];
     const now = new Date();
@@ -328,8 +336,12 @@ export async function POST() {
     for (let i = 0; i < studentDocs.length; i++) {
       const s        = studentDocs[i];
       const prof     = PERF_PROFILES[studentRows[i].profileIdx];
-      const total    = FEE_BY_BATCH[s.section_id.toString()] || 60000;
-      const dueDate  = new Date(s.admission_date);
+      const freq     = s.fee_frequency;
+      // Invoice charges the base monthly rate × months-in-cycle for this student's plan.
+      const total    = invoiceAmount(s.monthly_fee, freq);
+      const dueStart = new Date(s.admission_date);
+      dueStart.setUTCHours(0, 0, 0, 0);
+      const dueDate  = new Date(dueStart);
       dueDate.setDate(dueDate.getDate() + 45);
 
       let paid = 0;
@@ -353,6 +365,9 @@ export async function POST() {
         due_amount:   Math.max(0, total - paid),
         due_date:     dueDate,
         status:       paid >= total ? "PAID" : paid > 0 ? "PARTIAL" : "DUE",
+        frequency:    freq,
+        period_start: dueDate,
+        period_end:   periodEnd(dueDate, freq),
         institute_id: iid,
         createdAt:    s.admission_date,
         updatedAt:    s.admission_date,
@@ -523,6 +538,41 @@ export async function POST() {
     }
     tag(`Results: ${resultDocs.length}`);
 
+    // Subject-teacher assignments per section (shared by homework + timetable below).
+    const SECTION_TEACHER_MAP = {
+      [jee11A._id.toString()]: [
+        { subj: "Physics",   teacherIdx: 0 },
+        { subj: "Chemistry", teacherIdx: 2 },
+        { subj: "Maths",     teacherIdx: 4 },
+      ],
+      [jee11B._id.toString()]: [
+        { subj: "Physics",   teacherIdx: 1 },
+        { subj: "Chemistry", teacherIdx: 3 },
+        { subj: "Maths",     teacherIdx: 5 },
+      ],
+      [jee12A._id.toString()]: [
+        { subj: "Physics",   teacherIdx: 10 },
+        { subj: "Chemistry", teacherIdx: 11 },
+        { subj: "Maths",     teacherIdx: 4 },
+      ],
+      [jee12B._id.toString()]: [
+        { subj: "Physics",   teacherIdx: 0 },
+        { subj: "Chemistry", teacherIdx: 2 },
+        { subj: "Maths",     teacherIdx: 9 },
+      ],
+      [neet11._id.toString()]: [
+        { subj: "Physics",   teacherIdx: 1 },
+        { subj: "Chemistry", teacherIdx: 7 },
+        { subj: "Biology",   teacherIdx: 6 },
+      ],
+      [found._id.toString()]: [
+        { subj: "Physics",   teacherIdx: 10 },
+        { subj: "Chemistry", teacherIdx: 3 },
+        { subj: "Maths",     teacherIdx: 5 },
+        { subj: "English",   teacherIdx: 8 },
+      ],
+    };
+
     // ── HOMEWORK ──────────────────────────────────────────────────────────────
     tag("Creating homework...");
     const hwDocs = [];
@@ -630,40 +680,7 @@ export async function POST() {
     const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
     const PERIODS_PER_DAY = 8;
 
-    // Subject-teacher assignments per section
-    const SECTION_TEACHER_MAP = {
-      [jee11A._id.toString()]: [
-        { subj: "Physics",   teacherIdx: 0 },
-        { subj: "Chemistry", teacherIdx: 2 },
-        { subj: "Maths",     teacherIdx: 4 },
-      ],
-      [jee11B._id.toString()]: [
-        { subj: "Physics",   teacherIdx: 1 },
-        { subj: "Chemistry", teacherIdx: 3 },
-        { subj: "Maths",     teacherIdx: 5 },
-      ],
-      [jee12A._id.toString()]: [
-        { subj: "Physics",   teacherIdx: 10 },
-        { subj: "Chemistry", teacherIdx: 11 },
-        { subj: "Maths",     teacherIdx: 4 },
-      ],
-      [jee12B._id.toString()]: [
-        { subj: "Physics",   teacherIdx: 0 },
-        { subj: "Chemistry", teacherIdx: 2 },
-        { subj: "Maths",     teacherIdx: 9 },
-      ],
-      [neet11._id.toString()]: [
-        { subj: "Physics",   teacherIdx: 1 },
-        { subj: "Chemistry", teacherIdx: 7 },
-        { subj: "Biology",   teacherIdx: 6 },
-      ],
-      [found._id.toString()]: [
-        { subj: "Physics",   teacherIdx: 10 },
-        { subj: "Chemistry", teacherIdx: 3 },
-        { subj: "Maths",     teacherIdx: 5 },
-        { subj: "English",   teacherIdx: 8 },
-      ],
-    };
+    // SECTION_TEACHER_MAP is defined above (shared with the homework block).
 
     // Period rotation: each subject gets 2 periods per day in rotation
     const ttDocs = [];
@@ -721,6 +738,7 @@ export async function POST() {
 
   } catch (e) {
     console.error("Demo seed error:", e);
+    await reportError({ source: "api/seed/demo POST", error: e });
     return NextResponse.json({ success: false, error: e.message, stack: e.stack?.slice(0,500) }, { status: 500 });
   }
 }

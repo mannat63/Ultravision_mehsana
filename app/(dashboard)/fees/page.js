@@ -9,6 +9,7 @@ import {
 const PAGE_SIZE = 30;
 import toast from "react-hot-toast";
 import { createPdf, addTable, downloadPdf } from "@/lib/exportPdf";
+import { FREQUENCY_LABELS, CYCLE_MONTHS, PERIOD_NOUN } from "@/lib/fees";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 function midnight(d) {
@@ -17,6 +18,25 @@ function midnight(d) {
   return dt;
 }
 function today() { return midnight(new Date()); }
+
+// Frequency-aware label for a single invoice, e.g. "Quarter 2 · Apr–Jun 2026".
+function periodLabel(fee, index) {
+  const freq = fee.frequency || "MONTHLY";
+  const noun = PERIOD_NOUN[freq] || "Cycle";
+  const opts = { day: "2-digit", month: "short", year: "numeric" };
+  if (fee.period_start && fee.period_end) {
+    const s = new Date(fee.period_start);
+    const e = new Date(fee.period_end);
+    const sameYear = s.getFullYear() === e.getFullYear();
+    const sMonth = s.toLocaleDateString("en-IN", { month: "short" });
+    const eMonth = e.toLocaleDateString("en-IN", { month: "short" });
+    const range = freq === "MONTHLY"
+      ? s.toLocaleDateString("en-IN", { month: "short", year: "numeric" })
+      : `${sMonth}${sameYear ? "" : " " + s.getFullYear()}–${eMonth} ${e.getFullYear()}`;
+    return `${noun} ${index + 1} · ${range}`;
+  }
+  return `${noun} ${index + 1} · Due ${new Date(fee.due_date).toLocaleDateString("en-IN", opts)}`;
+}
 
 function feeStatus(fee) {
   if (fee.status === "PAID") return "PAID";
@@ -66,7 +86,12 @@ function StudentFeeCard({ student, fees, onOpen }) {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="font-bold text-gray-900 text-sm group-hover:text-blue-600 transition-colors">{name}</div>
-          <div className="text-[11px] text-gray-400 font-mono mt-0.5">{phone}</div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-[11px] text-gray-400 font-mono">{phone}</span>
+            <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[9px] font-bold rounded uppercase tracking-wide">
+              {FREQUENCY_LABELS[student.fee_frequency] || "Monthly"}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {pill}
@@ -199,7 +224,9 @@ function FeeModal({ student, fees, onClose, onRefresh, role }) {
         <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/80">
           <div>
             <h2 className="text-base font-bold text-gray-900">{name}</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Fee Timeline · {sorted.length} records</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {FREQUENCY_LABELS[student.fee_frequency] || "Monthly"} plan · {sorted.length} invoice{sorted.length !== 1 ? "s" : ""}
+            </p>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors">
             <X size={16} />
@@ -223,7 +250,7 @@ function FeeModal({ student, fees, onClose, onRefresh, role }) {
                 <div className="text-base font-bold text-red-500">₹{totalOutstanding.toLocaleString()}</div>
               </div>
               <div className="text-center">
-                <div className="text-[10px] text-gray-400 uppercase font-semibold">Overdue Months</div>
+                <div className="text-[10px] text-gray-400 uppercase font-semibold">Overdue Invoices</div>
                 <div className="text-base font-bold text-gray-700">{overdueCount}</div>
               </div>
             </div>
@@ -246,7 +273,7 @@ function FeeModal({ student, fees, onClose, onRefresh, role }) {
                     <div className={`w-2 h-2 rounded-full ${cfg.dot} shrink-0`} />
                     <div>
                       <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                        Month {idx + 1} · Due {new Date(fee.due_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                        {periodLabel(fee, idx)}
                       </div>
                       <div className={`text-xs font-bold mt-0.5 ${cfg.text}`}>{label}</div>
                     </div>
@@ -353,7 +380,7 @@ export default function FeesPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [form, setForm]         = useState({ student_id: "", total_amount: "", due_date: "" });
+  const [form, setForm]         = useState({ student_id: "", monthly_fee: "", fee_frequency: "MONTHLY", due_date: "" });
   const [defaulters, setDefaulters] = useState([]);
   const [reminding, setReminding]   = useState(false);
   const [feePage, setFeePage]       = useState(1);
@@ -398,7 +425,7 @@ export default function FeesPage() {
       });
       if (res.ok) {
         setShowForm(false);
-        setForm({ student_id: "", total_amount: "", due_date: "" });
+        setForm({ student_id: "", monthly_fee: "", fee_frequency: "MONTHLY", due_date: "" });
         loadData();
         toast.success("Fee record created");
       } else {
@@ -562,28 +589,44 @@ export default function FeesPage() {
 
       {/* ─ Create Fee Form ─ */}
       {showForm && role === "ADMIN" && (
-        <form onSubmit={handleCreateFee} className="card bg-gray-50 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Student</label>
-            <select required value={form.student_id} onChange={e => setForm({ ...form, student_id: e.target.value })} className="input-field" disabled={creating}>
-              <option value="">Select Student</option>
-              {students.map(s => <option key={s._id} value={s._id}>{s.user_id?.name || s.parent_name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Amount</label>
-            <div className="relative">
-              <span className="absolute left-3.5 top-2.5 text-gray-400 font-semibold">₹</span>
-              <input type="number" placeholder="Amount" required value={form.total_amount} onChange={e => setForm({ ...form, total_amount: e.target.value })} className="input-field pl-8" disabled={creating} />
+        <form onSubmit={handleCreateFee} className="card bg-gray-50 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="lg:col-span-2">
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Student</label>
+              <select required value={form.student_id} onChange={e => setForm({ ...form, student_id: e.target.value })} className="input-field" disabled={creating}>
+                <option value="">Select Student</option>
+                {students.map(s => <option key={s._id} value={s._id}>{s.user_id?.name || s.parent_name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Monthly Fee</label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-2.5 text-gray-400 font-semibold">₹</span>
+                <input type="number" min="0" placeholder="3000" required value={form.monthly_fee} onChange={e => setForm({ ...form, monthly_fee: e.target.value })} className="input-field pl-8" disabled={creating} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Frequency</label>
+              <select value={form.fee_frequency} onChange={e => setForm({ ...form, fee_frequency: e.target.value })} className="input-field" disabled={creating}>
+                <option value="MONTHLY">Monthly</option>
+                <option value="QUARTERLY">Quarterly</option>
+                <option value="HALF_YEARLY">Half-Yearly</option>
+                <option value="YEARLY">Yearly</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">First Due Date</label>
+              <input type="date" required value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} className="input-field" disabled={creating} />
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Due Date</label>
-            <input type="date" required value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} className="input-field" disabled={creating} />
-          </div>
-          <div className="flex items-end">
-            <button type="submit" className="btn-primary w-full" disabled={creating}>
-              {creating ? "Saving..." : <><CheckCircle size={15} /> Save</>}
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <p className="text-[11px] text-slate-500">
+              {form.monthly_fee && Number(form.monthly_fee) > 0 ? (
+                <>Each invoice charges <span className="font-bold text-slate-700">₹{(Number(form.monthly_fee) * (CYCLE_MONTHS[form.fee_frequency] || 1)).toLocaleString()}</span> every {({ MONTHLY: "month", QUARTERLY: "3 months", HALF_YEARLY: "6 months", YEARLY: "year" }[form.fee_frequency] || "month")}. Sets this student's billing plan.</>
+              ) : "Sets the student's recurring billing plan."}
+            </p>
+            <button type="submit" className="btn-primary" disabled={creating}>
+              {creating ? "Saving..." : <><CheckCircle size={15} /> Save Plan</>}
             </button>
           </div>
         </form>
