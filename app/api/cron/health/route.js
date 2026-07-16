@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import dbConnect from '@/lib/db/mongodb';
 import { collectAnalytics } from '@/lib/analytics';
 
@@ -35,20 +36,37 @@ export async function GET(req) {
   }
 
   const environment = process.env.NODE_ENV || 'development';
+  const startedAt = Date.now();
   let analytics = null;
+  let dbLatencyMs = null;
 
   try {
-    // 1. Gather a live analytics snapshot from the database.
+    // 1. Connect + measure DB round-trip latency (Intellogy renders metrics.db_latency_ms).
     await dbConnect();
-    analytics = await collectAnalytics();
+    const dbStart = Date.now();
+    await mongoose.connection.db.admin().ping();
+    dbLatencyMs = Date.now() - dbStart;
 
-    // 2. Push health + analytics to Intellogy OS in one real-time payload.
+    // 2. Gather a live analytics snapshot from the database.
+    analytics = await collectAnalytics();
+    const responseTimeMs = Date.now() - startedAt;
+
+    // 3. Push health + analytics in one payload.
+    //    Top-level `response_time_ms` / `error_count` and `metrics.db_latency_ms` /
+    //    `metrics.active_users` match the schema Intellogy OS already renders; the full
+    //    ERP snapshot rides along under `metrics.erp` for richer dashboards.
     const res = await sendToIntellogy({
       status: 'healthy',
-      message: `ERP online · ${analytics.totals.total_students} students · ₹${analytics.totals.total_collected.toLocaleString()} collected`,
+      message: `ERP online · ${analytics.totals.total_students} students · ₹${analytics.totals.total_collected.toLocaleString('en-IN')} collected`,
       source: 'vercel-erp',
       environment,
-      metrics: analytics,
+      response_time_ms: responseTimeMs,
+      error_count: 0,
+      metrics: {
+        db_latency_ms: dbLatencyMs,
+        active_users: analytics.totals.total_students,
+        erp: analytics,
+      },
     });
 
     if (!res.ok) {
@@ -56,11 +74,18 @@ export async function GET(req) {
       throw new Error(`Ingest returned ${res.status}: ${text}`);
     }
 
-    return NextResponse.json({ success: true, status: 'healthy', totals: analytics.totals });
+    return NextResponse.json({
+      success: true,
+      status: 'healthy',
+      response_time_ms: responseTimeMs,
+      db_latency_ms: dbLatencyMs,
+      // Echo the exact analytics we pushed, so hitting this URL shows what Intellogy received.
+      metrics: analytics,
+    });
   } catch (error) {
     console.error('Health/analytics ping failed:', error);
 
-    // 3. Report the failure to Intellogy OS too, so problems surface in real time.
+    // 4. Report the failure to Intellogy OS too, so problems surface in real time.
     //    Best-effort — never let the error report itself crash the route.
     try {
       await sendToIntellogy({
@@ -69,7 +94,19 @@ export async function GET(req) {
         message: error.message || 'Unknown error while collecting analytics',
         source: 'vercel-erp',
         environment,
-        metrics: analytics, // whatever we gathered before failing (may be null)
+        response_time_ms: Date.now() - startedAt,
+        error_count: 1,
+        metrics: {
+          db_latency_ms: dbLatencyMs,
+          active_users: analytics?.totals?.total_students ?? null,
+          erp: analytics, // whatever we gathered before failing (may be null)
+        },
+        error: {
+          source: 'api/cron/health',
+          message: error.message,
+          name: error.name,
+          stack: error.stack?.split('\n').slice(0, 5).join('\n'),
+        },
       });
     } catch (reportErr) {
       console.error('Failed to report error to Intellogy OS:', reportErr.message);
