@@ -72,12 +72,16 @@ export default function ClassesAndSectionsPage() {
 
   async function handleCreateSection(e, classId) {
     e.preventDefault();
+    const seats = parseInt(sectionForm.capacity, 10);
+    if (!Number.isInteger(seats) || seats < 1) {
+      return toast.error("Seats must be a whole number of at least 1");
+    }
     setCreatingSection(true);
     try {
       const res = await fetch("/api/sections", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: sectionForm.name, class_id: classId, capacity: sectionForm.capacity }),
+        body: JSON.stringify({ name: sectionForm.name, class_id: classId, capacity: seats }),
       });
       if (res.ok) {
         setShowSectionFormId(null);
@@ -97,11 +101,15 @@ export default function ClassesAndSectionsPage() {
 
   async function handleEditSectionSave(e, sectionId) {
     e.preventDefault();
+    const seats = parseInt(editSectionForm.capacity, 10);
+    if (!Number.isInteger(seats) || seats < 1) {
+      return toast.error("Seats must be a whole number of at least 1");
+    }
     try {
       const res = await fetch(`/api/sections/${sectionId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editSectionForm.name, capacity: editSectionForm.capacity }),
+        body: JSON.stringify({ name: editSectionForm.name, capacity: seats }),
       });
       if (res.ok) {
         const updated = await fetch("/api/sections").then((r) => r.json());
@@ -317,7 +325,8 @@ export default function ClassesAndSectionsPage() {
                       placeholder="Seats"
                       min="1"
                       value={sectionForm.capacity}
-                      onChange={(e) => setSectionForm({ ...sectionForm, capacity: parseInt(e.target.value) || 30 })}
+                      // Raw string while typing — see note in the edit form below.
+                      onChange={(e) => setSectionForm({ ...sectionForm, capacity: e.target.value })}
                       className="input-field w-20 !py-1.5 text-sm"
                       required
                       disabled={creatingSection}
@@ -335,7 +344,7 @@ export default function ClassesAndSectionsPage() {
                       (s) => (s.section_id?._id || s.section_id) === sec._id
                     ).length;
 
-                    const cap = sec.capacity || 30;
+                    const cap = sec.capacity ?? 30;
                     const fillPct = Math.min(100, Math.round((secCount / cap) * 100));
                     const nearFull = fillPct >= 100;
 
@@ -360,7 +369,9 @@ export default function ClassesAndSectionsPage() {
                                 min="1"
                                 className="input-field !py-1 !px-2 text-xs text-center flex-1"
                                 value={editSectionForm.capacity}
-                                onChange={(e) => setEditSectionForm({ ...editSectionForm, capacity: parseInt(e.target.value) || 30 })}
+                                // Keep the raw string so the field can be cleared while typing.
+                                // Coercing here (parseInt(...) || 30) forced "30" back on every keystroke.
+                                onChange={(e) => setEditSectionForm({ ...editSectionForm, capacity: e.target.value })}
                                 required
                               />
                             </div>
@@ -392,7 +403,7 @@ export default function ClassesAndSectionsPage() {
                             {role === "ADMIN" && (
                               <div className="absolute inset-0 rounded-xl flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/70 backdrop-blur-[1px]">
                                 <button
-                                  onClick={() => { setEditSectionId(sec._id); setEditSectionForm({ name: sec.name, capacity: sec.capacity || 30 }); }}
+                                  onClick={() => { setEditSectionId(sec._id); setEditSectionForm({ name: sec.name, capacity: sec.capacity ?? 30 }); }}
                                   className="p-1.5 rounded-md bg-white shadow-sm border border-gray-200 text-gray-500 hover:text-blue-600 transition-colors"
                                 >
                                   <Pencil size={12} />
