@@ -10,23 +10,50 @@ export async function PUT(req, { params }) {
     const authUser = await requireRole(["ADMIN"]);
     const { id } = await params;
     const body = await req.json();
-    let { name, class_id, capacity } = body;
+    const { name, class_id, capacity } = body;
 
-    // Default prefix if not present
-    let sectionName = name;
-    if (sectionName && !sectionName.toLowerCase().startsWith("section")) {
-      sectionName = `Section ${sectionName}`;
+    const existing = await Section.findOne({ _id: id, institute_id: authUser.institute_id });
+    if (!existing) return NextResponse.json({ error: "Section not found" }, { status: 404 });
+
+    const updateData = {};
+
+    // Store the name exactly as typed — no forced "Section " prefix.
+    if (name !== undefined) {
+      const sectionName = String(name).trim();
+      if (!sectionName) {
+        return NextResponse.json({ error: "Section name cannot be empty" }, { status: 400 });
+      }
+      // Case-insensitive duplicate check against *other* sections in the same class.
+      const escaped = sectionName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const clash = await Section.findOne({
+        _id: { $ne: id },
+        name: { $regex: new RegExp(`^${escaped}$`, "i") },
+        class_id: class_id || existing.class_id,
+        institute_id: authUser.institute_id,
+      });
+      if (clash) {
+        return NextResponse.json({ error: "A section with this name already exists in this class." }, { status: 400 });
+      }
+      updateData.name = sectionName;
     }
 
-    const updateData = { name: sectionName, class_id };
-    if (capacity !== undefined) updateData.capacity = parseInt(capacity);
+    // Only touch class_id when the caller actually sent one — the edit form sends
+    // just { name, capacity }, and blindly writing `undefined` could clear the class link.
+    if (class_id) updateData.class_id = class_id;
+
+    if (capacity !== undefined && capacity !== null && capacity !== "") {
+      const seats = parseInt(capacity, 10);
+      if (!Number.isInteger(seats) || seats < 1) {
+        return NextResponse.json({ error: "Seats must be a whole number of at least 1" }, { status: 400 });
+      }
+      updateData.capacity = seats;
+    }
 
     const section = await Section.findOneAndUpdate(
       { _id: id, institute_id: authUser.institute_id },
-      updateData,
-      { new: true }
-    )
-      .populate("class_id", "name");
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).populate("class_id", "name");
 
     if (!section) return NextResponse.json({ error: "Section not found" }, { status: 404 });
     return NextResponse.json(section);

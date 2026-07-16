@@ -51,8 +51,8 @@ export async function POST(req) {
     const courseCommerce = await Course.create({ name: "Commerce", institute_id: iid });
 
     // 3. Sections
-    const section11A = await Section.create({ name: "Section A", class_id: class11._id, teacher_id: t1._id, timing: "8:00 AM - 10:00 AM", institute_id: iid });
-    const section12A = await Section.create({ name: "Section A", class_id: class12._id, teacher_id: t2._id, timing: "10:00 AM - 12:00 PM", institute_id: iid });
+    const section11A = await Section.create({ name: "A", class_id: class11._id, teacher_id: t1._id, timing: "8:00 AM - 10:00 AM", institute_id: iid });
+    const section12A = await Section.create({ name: "A", class_id: class12._id, teacher_id: t2._id, timing: "10:00 AM - 12:00 PM", institute_id: iid });
 
     // 4. Students (Exactly 10)
     const studentData = [

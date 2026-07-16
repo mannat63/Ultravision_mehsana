@@ -43,7 +43,9 @@ export async function GET(req) {
     }
 
     const sections = await Section.find(query)
-      .select("name class_id")
+      // `capacity` must be selected — without it the client falls back to a hardcoded 30
+      // and every seat edit appears to reset itself.
+      .select("name class_id capacity")
       .populate("class_id", "name")
       .lean();
 
@@ -66,21 +68,33 @@ export async function POST(req) {
       return NextResponse.json({ success: false, error: "Name and class are required" }, { status: 400 });
     }
 
-    // Default prefix if not present
-    let sectionName = name;
-    if (sectionName && !sectionName.toLowerCase().startsWith("section")) {
-      sectionName = `Section ${sectionName}`;
+    // Store the name exactly as the admin typed it — "A" stays "A".
+    // (We used to force a "Section " prefix, which produced names like "Section A".)
+    const sectionName = String(name).trim();
+    if (!sectionName) {
+      return NextResponse.json({ error: "Section name cannot be empty" }, { status: 400 });
     }
 
-    const existingSection = await Section.findOne({ name: sectionName, class_id, institute_id: authUser.institute_id });
+    // Case-insensitive duplicate check within the same class.
+    const escaped = sectionName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const existingSection = await Section.findOne({
+      name: { $regex: new RegExp(`^${escaped}$`, "i") },
+      class_id,
+      institute_id: authUser.institute_id,
+    });
     if (existingSection) {
       return NextResponse.json({ error: "A section with this name already exists in this class." }, { status: 400 });
+    }
+
+    const seats = capacity === undefined || capacity === null || capacity === "" ? 30 : parseInt(capacity, 10);
+    if (!Number.isInteger(seats) || seats < 1) {
+      return NextResponse.json({ error: "Seats must be a whole number of at least 1" }, { status: 400 });
     }
 
     const section = await Section.create({
       name: sectionName,
       class_id,
-      capacity: capacity ? parseInt(capacity) : 30,
+      capacity: seats,
       institute_id: authUser.institute_id,
     });
 
