@@ -6,14 +6,14 @@
 // TODO: Replace hardcoded role logic with DB-based roles
 export const ROLE_MAP = {
   "academyultravision@gmail.com": "ADMIN",
-  "teamintellogy@gmail.com": "ADMIN",
+  "intellogy.business@gmail.com": "ADMIN",
 };
 
 // Default role for emails not in ROLE_MAP
 export const DEFAULT_ROLE = "STUDENT";
 
 // Institute name used when auto-provisioning
-export const INSTITUTE_NAME = "Intellogy Corporation";
+export const INSTITUTE_NAME = "UltraVision Academy";
 
 // Feature toggles (defaults — can be overridden per-institute in DB)
 export const FEATURES = {

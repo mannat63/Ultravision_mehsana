@@ -70,11 +70,11 @@ function DesktopSidebar({ role, userName, links, pathname, onOpenNotification })
       {/* Brand */}
       <div className="py-6 flex-shrink-0 flex items-center px-[16px]">
         <div className="w-12 h-12 rounded-[20px] bg-white flex flex-shrink-0 items-center justify-center overflow-hidden border border-gray-100 shadow-sm">
-          <img src="/intellogy-logo.png" alt="Intellogy Corporation" className="w-[85%] h-[85%] object-contain" />
+          <img src="/uv_meh_logo.png" alt="UltraVision Academy" className="w-[85%] h-[85%] object-contain" />
         </div>
         <div className="flex-col ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 w-32 overflow-hidden whitespace-nowrap">
-          <span className="block font-extrabold text-gray-900 text-[13px] leading-tight tracking-tight uppercase">Intellogy</span>
-          <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-0.5">Corporation</span>
+          <span className="block font-extrabold text-gray-900 text-[13px] leading-tight tracking-tight uppercase">UltraVision</span>
+          <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-0.5">Academy</span>
         </div>
       </div>
 
@@ -236,7 +236,7 @@ function MobileBottomBar({ role, links, pathname, onClose }) {
             <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-xl bg-white overflow-hidden border border-gray-100 flex items-center justify-center">
-                  <img src="/intellogy-logo.png" alt="Intellogy" className="w-6 h-6 object-contain" />
+                  <img src="/uv_meh_logo.png" alt="UltraVision Academy" className="w-6 h-6 object-contain" />
                 </div>
                 <span className="text-sm font-bold text-gray-900">All Pages</span>
               </div>

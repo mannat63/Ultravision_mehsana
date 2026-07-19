@@ -82,7 +82,7 @@ const automationExamples = [
     trigger: "New Website Inquiry",
     action: "Lead created + Welcome message",
     icon: Globe,
-    message: "Welcome! Thank you for your interest in Intellogy Corporation. Our team will contact you within 24 hours.",
+    message: "Welcome! Thank you for your interest in UltraVision Academy. Our team will contact you within 24 hours.",
   },
   {
     trigger: "Homework Not Submitted",

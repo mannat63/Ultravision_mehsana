@@ -61,7 +61,7 @@ export default function ContactSupport() {
             </a>
 
             <a
-              href="mailto:support@intellogycoaching.in"
+              href="mailto:intellogy.business@gmail.com"
               className="flex items-center gap-3 p-3 rounded-xl bg-violet-50 border border-violet-100 hover:border-violet-200 hover:shadow-sm transition-all group"
             >
               <div className="w-10 h-10 rounded-lg bg-violet-500 text-white flex items-center justify-center shrink-0">
@@ -69,14 +69,14 @@ export default function ContactSupport() {
               </div>
               <div>
                 <div className="text-sm font-bold text-gray-900 group-hover:text-violet-700 transition-colors">Email Us</div>
-                <div className="text-[11px] text-gray-500">support@intellogycoaching.in</div>
+                <div className="text-[11px] text-gray-500">intellogy.business@gmail.com</div>
               </div>
             </a>
           </div>
 
           {/* Footer */}
           <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
-            <p className="text-[10px] text-gray-400 text-center font-medium">Intellogy Corporation</p>
+            <p className="text-[10px] text-gray-400 text-center font-medium">UltraVision Academy</p>
           </div>
         </div>
       )}
