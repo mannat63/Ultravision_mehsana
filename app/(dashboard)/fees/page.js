@@ -118,6 +118,117 @@ function StudentFeeCard({ student, fees, onOpen }) {
   );
 }
 
+// ─── Post-settlement dialog ───────────────────────────────────────────────────
+// Shown once a payment fully settles an invoice. Settlement NEVER creates the next
+// record on its own — the admin decides here what happens to the billing cycle.
+function SettlementDialog({ data, onClose, onDone }) {
+  const [busy, setBusy] = useState(null); // "next" | "pause"
+  const student = data.student || {};
+  const planLabel = FREQUENCY_LABELS[student.fee_frequency] || "Monthly";
+
+  async function createNext() {
+    setBusy("next");
+    try {
+      const res = await fetch("/api/fees/next", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_id: student._id }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // e.g. an unsettled or duplicate record already exists — server is authoritative.
+        toast.error(body.error || "Could not create the next fee record");
+        return;
+      }
+      toast.success("Next fee record created");
+      onDone();
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function pauseCycle() {
+    setBusy("pause");
+    try {
+      const res = await fetch("/api/fees/cycle", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_id: student._id, status: "PAUSED" }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(body.error || "Could not pause the fee cycle");
+        return;
+      }
+      toast.success("Fee cycle paused — no new records will be created");
+      onDone();
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const working = busy !== null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="px-6 pt-6 pb-4 text-center">
+          <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-3">
+            <CheckCircle size={24} className="text-emerald-600" />
+          </div>
+          <h2 className="text-base font-bold text-gray-900">Fee settled</h2>
+          <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+            {student.name ? <span className="font-semibold text-gray-700">{student.name}</span> : "This student"}
+            {"'"}s invoice is fully paid. No new fee record has been created.
+            <br />
+            What would you like to do next?
+          </p>
+        </div>
+
+        <div className="px-6 pb-6 flex flex-col gap-2">
+          <button
+            onClick={createNext}
+            disabled={working}
+            className="w-full px-4 py-2.5 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+          >
+            {busy === "next" ? "Creating…" : "Create Next Fee Record"}
+            <span className="block text-[10px] font-medium text-emerald-100 mt-0.5">
+              Raises the next {planLabel.toLowerCase()} invoice from their plan
+            </span>
+          </button>
+
+          <button
+            onClick={pauseCycle}
+            disabled={working}
+            className="w-full px-4 py-2.5 bg-white border border-amber-200 text-amber-700 text-sm font-bold rounded-lg hover:bg-amber-50 transition-colors disabled:opacity-50"
+          >
+            {busy === "pause" ? "Pausing…" : "Pause / End for Now"}
+            <span className="block text-[10px] font-medium text-amber-600/80 mt-0.5">
+              On a break, left, or continuation pending — no records generated
+            </span>
+          </button>
+
+          <button
+            onClick={onClose}
+            disabled={working}
+            className="w-full px-4 py-2 text-gray-500 text-xs font-semibold rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Fee Timeline Modal ───────────────────────────────────────────────────────
 function FeeModal({ student, fees, onClose, onRefresh, role }) {
   const name = student.user_id?.name || student.parent_name || "—";
@@ -126,28 +237,51 @@ function FeeModal({ student, fees, onClose, onRefresh, role }) {
   const [reminding, setReminding] = useState(false);
 
   const [paying, setPaying]     = useState(false);
+  // Set when a payment fully settles an invoice — drives the post-settlement dialog.
+  // Settling never creates the next record; the admin decides here.
+  const [settled, setSettled]   = useState(null);
 
   // Sort chronologically
   const sorted = [...fees].sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+
+  /**
+   * Record a payment, then confirm it. Returns the confirm payload so callers can
+   * react to `settled`. Throws nothing — surfaces errors as toasts and returns null.
+   */
+  async function submitPayment(body, { successMessage }) {
+    const res = await fetch("/api/payments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error || "Payment failed");
+      return null;
+    }
+
+    const payment = await res.json();
+    const confirmRes = await fetch(`/api/payments/${payment._id}/confirm`, { method: "PUT" });
+    const confirmed = await confirmRes.json().catch(() => ({}));
+    if (!confirmRes.ok) {
+      toast.error(confirmed.error || "Could not confirm payment");
+      return null;
+    }
+
+    toast.success(successMessage);
+    onRefresh();
+    return confirmed;
+  }
 
   async function handlePayment(e, fee) {
     e.preventDefault();
     setPaying(true);
     try {
-      const res = await fetch("/api/payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payForm),
-      });
-      if (res.ok) {
-        const payment = await res.json();
-        await fetch(`/api/payments/${payment._id}/confirm`, { method: "PUT" });
-        toast.success("Payment recorded!");
+      const confirmed = await submitPayment(payForm, { successMessage: "Payment recorded!" });
+      if (confirmed) {
         setShowPay(null);
-        onRefresh();
-      } else {
-        const err = await res.json();
-        toast.error(err.error || "Payment failed");
+        // Final payment on this invoice — ask what happens to the cycle next.
+        if (confirmed.settled) setSettled(confirmed);
       }
     } catch {
       toast.error("Network error");
@@ -161,24 +295,16 @@ function FeeModal({ student, fees, onClose, onRefresh, role }) {
     if (!ok) return;
     setPaying(true);
     try {
-      const res = await fetch("/api/payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fee_id: fee._id, student_id: student._id, amount: fee.due_amount, method: "CASH" }),
-      });
-      if (res.ok) {
-        const payment = await res.json();
-        await fetch(`/api/payments/${payment._id}/confirm`, { method: "PUT" });
-        toast.success("Fee settled!");
-        onRefresh();
-      } else {
-        const err = await res.json();
-        toast.error(err.error || "Settle failed");
-      }
+      const confirmed = await submitPayment(
+        { fee_id: fee._id, student_id: student._id, amount: fee.due_amount, method: "CASH" },
+        { successMessage: "Fee settled!" }
+      );
+      if (confirmed?.settled) setSettled(confirmed);
     } catch {
       toast.error("Network error");
+    } finally {
+      setPaying(false);
     }
-    setPaying(false);
   }
 
   async function handleRemind(fee) {
@@ -216,6 +342,16 @@ function FeeModal({ student, fees, onClose, onRefresh, role }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+
+      {/* Asks what to do with the billing cycle after a final payment. */}
+      {settled && (
+        <SettlementDialog
+          data={settled}
+          onClose={() => setSettled(null)}
+          onDone={() => { setSettled(null); onRefresh(); }}
+        />
+      )}
+
       <div
         className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
@@ -390,8 +526,11 @@ export default function FeesPage() {
 
   useEffect(() => { loadData(); }, []);
 
-  async function loadData() {
-    setLoading(true);
+  // `silent` reloads data without flipping the page into its skeleton state. That matters
+  // while the fee modal is open: showing the skeleton unmounts the modal and would throw
+  // away the post-settlement dialog before the admin ever sees it.
+  async function loadData({ silent = false } = {}) {
+    if (!silent) setLoading(true);
     const [f, s, m, dRes, c, sec] = await Promise.all([
       fetch("/api/fees").then(r => r.json()),
       fetch("/api/students?limit=200").then(r => r.json()),
@@ -409,9 +548,9 @@ export default function FeesPage() {
     setLoading(false);
   }
 
-  // If modal is open, refresh its fees too
+  // If modal is open, refresh its fees too — silently, so the modal survives the reload.
   async function handleRefresh() {
-    await loadData();
+    await loadData({ silent: true });
   }
 
   async function handleCreateFee(e) {

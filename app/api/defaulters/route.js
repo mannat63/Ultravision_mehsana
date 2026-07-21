@@ -4,7 +4,6 @@ import { requireRole } from "@/lib/auth";
 import Fee from "@/models/Fee";
 import Student from "@/models/Student";
 import User from "@/models/User";
-import { generateRecurringFees } from "@/lib/fees";
 import { reportError } from "@/lib/reportError";
 
 export async function GET(req) {
@@ -12,8 +11,8 @@ export async function GET(req) {
     await dbConnect();
     const authUser = await requireRole(["ADMIN"]);
 
-    // Auto-generate any missing recurring invoices (plan-aware) before listing defaulters.
-    await generateRecurringFees(authUser.institute_id, { Fee, Student });
+    // NOTE: listing defaulters never creates invoices. Recurring invoices are raised
+    // only by an explicit admin action (POST /api/fees/next) — see lib/fees.js.
 
     // Find all fees that are not PAID
     const overdueFees = await Fee.find({ 

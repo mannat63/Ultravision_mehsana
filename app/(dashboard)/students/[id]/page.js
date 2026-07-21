@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, User, Phone, Calendar, BookOpen, TrendingUp, Clock, CreditCard, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { ArrowLeft, User, Phone, Calendar, BookOpen, TrendingUp, Clock, CreditCard, ChevronDown, ChevronUp, AlertTriangle, PauseCircle } from "lucide-react";
+import toast from "react-hot-toast";
+
+const FREQ_LABELS = { MONTHLY: "Monthly", QUARTERLY: "Quarterly", HALF_YEARLY: "Half-Yearly", YEARLY: "Yearly" };
 
 const TABS = ["Overview", "Performance", "Attendance", "Fees"];
 
@@ -42,14 +45,49 @@ export default function StudentProfilePage() {
   const [error, setError]       = useState(null);
   const [tab, setTab]           = useState("Overview");
   const [expandedTest, setExpandedTest] = useState(null);
+  const [creatingFee, setCreatingFee]   = useState(false);
+
+  async function loadStudent() {
+    try {
+      const r = await fetch(`/api/students/${id}`);
+      const d = await r.json();
+      if (d.error) setError(d.error);
+      else setData(d);
+    } catch {
+      setError("Failed to load");
+    }
+  }
 
   useEffect(() => {
-    fetch(`/api/students/${id}`)
-      .then(r => r.json())
-      .then(d => { if (d.error) setError(d.error); else setData(d); })
-      .catch(() => setError("Failed to load"))
-      .finally(() => setLoading(false));
+    loadStudent().finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  /**
+   * Resume a paused/completed billing cycle and raise the next invoice from the
+   * student's plan. The server enforces that no unsettled or duplicate record exists.
+   */
+  async function handleCreateFeeRecord() {
+    setCreatingFee(true);
+    try {
+      const res = await fetch("/api/fees/next", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_id: id }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(body.error || "Could not create fee record");
+        return;
+      }
+      toast.success("Fee record created — billing resumed");
+      await loadStudent();
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setCreatingFee(false);
+    }
+  }
 
   if (loading) return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -71,6 +109,13 @@ export default function StudentProfilePage() {
   );
 
   const { student, fee, payments, attendance, results, avgPerformance } = data;
+
+  // Billing cycle: PAUSED/COMPLETED means no invoices are raised until an admin
+  // explicitly creates the next one (which resumes the cycle).
+  const cycleStatus = student.fee_cycle_status || "ACTIVE";
+  const cycleStopped = cycleStatus === "PAUSED" || cycleStatus === "COMPLETED";
+  const planLabel = FREQ_LABELS[student?.fee_frequency] || "Monthly";
+
   const name    = student.user_id?.name || "Unknown";
   const contact = student.user_id?.phoneOrEmail || "—";
   const section = student.section_id ? `${student.section_id.class_id?.name || "?"} · ${student.section_id.name}` : "No Section";
@@ -226,13 +271,38 @@ export default function StudentProfilePage() {
       {/* ─── Fees ─── */}
       {tab === "Fees" && (
         <div className="space-y-4">
+          {/* Cycle is paused/ended — offer to resume it and raise the next invoice. */}
+          {cycleStopped && (
+            <div className="card !p-4 border border-amber-200 bg-amber-50/60 flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-start gap-3">
+                <PauseCircle size={20} className="text-amber-600 mt-0.5 shrink-0" />
+                <div>
+                  <div className="text-sm font-bold text-amber-800">
+                    Billing {cycleStatus === "COMPLETED" ? "ended" : "paused"}
+                  </div>
+                  <p className="text-xs text-amber-700/80 mt-0.5 max-w-md">
+                    No fee records are being generated for this student. Creating one resumes
+                    the {planLabel.toLowerCase()} cycle from their existing plan.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleCreateFeeRecord}
+                disabled={creatingFee}
+                className="px-4 py-2 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 shrink-0"
+              >
+                {creatingFee ? "Creating…" : "Create Fee Record"}
+              </button>
+            </div>
+          )}
+
           {fee ? (
             <>
               <div className="card !py-3 !px-4 flex items-center justify-between bg-slate-50 border border-slate-100">
                 <div>
                   <div className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Billing Plan</div>
                   <div className="text-sm font-bold text-slate-700">
-                    {({ MONTHLY: "Monthly", QUARTERLY: "Quarterly", HALF_YEARLY: "Half-Yearly", YEARLY: "Yearly" }[student?.fee_frequency] || "Monthly")}
+                    {planLabel}
                     {student?.monthly_fee ? <span className="text-gray-400 font-medium"> · ₹{Number(student.monthly_fee).toLocaleString()}/month</span> : null}
                   </div>
                 </div>

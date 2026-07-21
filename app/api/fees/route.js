@@ -6,7 +6,6 @@ import Student from "@/models/Student";
 import Institute from "@/models/Institute";
 import Notification from "@/models/Notification";
 import {
-  generateRecurringFees,
   normalizeFrequency,
   invoiceAmount,
   periodEnd,
@@ -42,11 +41,8 @@ export async function GET(req) {
       if (student_id) query.student_id = student_id;
     }
 
-    // --- AUTO-GENERATE RECURRING FEES (plan-aware: monthly/quarterly/half-yearly/yearly) ---
-    if (authUser.role === "ADMIN" || authUser.role === "TEACHER") {
-      await generateRecurringFees(authUser.institute_id, { Fee, Student });
-    }
-    // ---------------------------------------------
+    // NOTE: listing fees never creates them. Recurring invoices are raised only by an
+    // explicit admin action (POST /api/fees/next) — see lib/fees.js.
 
     const fees = await Fee.find(query)
       .select("student_id total_amount paid_amount due_amount due_date status frequency period_start period_end")
