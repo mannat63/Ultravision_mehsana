@@ -292,9 +292,14 @@ function MobileBottomBar({ role, links, pathname, onClose }) {
   );
 }
 
-export default function Sidebar({ role, userName, onClose, onOpenNotification }) {
+export default function Sidebar({ role, userName, showFees = false, onClose, onOpenNotification }) {
   const pathname = usePathname();
-  const links = roleLinksMap[role] || studentLinks;
+  let links = roleLinksMap[role] || studentLinks;
+
+  // Fee section is hidden from students/parents unless the academy turns it on.
+  if (role === "STUDENT" && !showFees) {
+    links = links.filter((l) => l.href !== "/fees");
+  }
 
   return (
     <>

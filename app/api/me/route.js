@@ -4,6 +4,7 @@ import dbConnect from "@/lib/db/mongodb";
 import User from "@/models/User";
 import Student from "@/models/Student";
 import Teacher from "@/models/Teacher";
+import { feesVisibleToStudents } from "@/lib/feeVisibility";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,8 @@ export async function GET() {
     await dbConnect();
     const user = await getAuthUser();
 
-    const base = { role: user.role, name: user.name, phoneOrEmail: user.phoneOrEmail };
+    const showFeesToStudents = await feesVisibleToStudents(user.institute_id);
+    const base = { role: user.role, name: user.name, phoneOrEmail: user.phoneOrEmail, showFeesToStudents };
 
     if (user.role === "TEACHER") {
       const { default: Subject } = await import("@/models/Subject");

@@ -70,6 +70,10 @@ export async function GET(req) {
     const sId = student._id;
     const inst = await Institute.findById(student.institute_id).lean();
 
+    // When fees are hidden from students, the report card omits all fee figures.
+    const { feesVisibleToStudents } = await import("@/lib/feeVisibility");
+    const feesVisible = await feesVisibleToStudents(student.institute_id);
+
     // Fetch Aggregated Data for This Student
     const [attendances, fees, tests] = await Promise.all([
       Attendance.find({
@@ -167,7 +171,7 @@ export async function GET(req) {
             absent: absentCount,
             percentage: parseFloat(attendancePercentage)
         },
-        fees: totalFeeObj,
+        fees: feesVisible ? totalFeeObj : null,
         tests: {
             taken: myResults.length,
             marks_scored: marksScored,

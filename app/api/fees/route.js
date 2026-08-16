@@ -31,6 +31,11 @@ export async function GET(req) {
         { status: 403 }
       );
     } else if (authUser.role === "STUDENT") {
+      // Fee section hidden from students → return nothing regardless of stored data.
+      const { feesVisibleToStudents } = await import("@/lib/feeVisibility");
+      if (!(await feesVisibleToStudents(authUser.institute_id))) {
+        return NextResponse.json([], { status: 200 });
+      }
       const student = await Student.findOne(
         { user_id: authUser._id },
         { _id: 1 }
@@ -100,12 +105,18 @@ export async function POST(req) {
       institute_id: authUser.institute_id,
     });
 
-    // Notify parent via in-app Notification (same as test notify)
+    // Notify parent via in-app Notification (same as test notify).
+    // Suppressed while the fee section is hidden from students/parents.
     try {
-      const student = await Student.findById(student_id)
-        .select("parent_phone parent_name user_id")
-        .populate("user_id", "name")
-        .lean();
+      const { feesVisibleToStudents } = await import("@/lib/feeVisibility");
+      const feesVisible = await feesVisibleToStudents(authUser.institute_id);
+
+      const student = feesVisible
+        ? await Student.findById(student_id)
+            .select("parent_phone parent_name user_id")
+            .populate("user_id", "name")
+            .lean()
+        : null;
 
       if (student) {
         const studentName = student.user_id?.name || student.parent_name || "Student";

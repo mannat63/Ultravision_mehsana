@@ -83,7 +83,7 @@ export default function StudentsPage() {
 
   const [modalOpen, setModalOpen]   = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
-  const [form, setForm] = useState({ name: "", email: "+91 ", student_phone: "+91 ", class_id: "", section_id: "", parent_name: "", parent_phone: "+91 ", admission_date: "", monthly_fee: "", fee_frequency: "MONTHLY", due_date: "" });
+  const [form, setForm] = useState({ name: "", email: "", student_phone: "+91 ", class_id: "", section_id: "", parent_name: "", parent_phone: "+91 ", admission_date: "", monthly_fee: "", fee_frequency: "MONTHLY", due_date: "" });
   const [submitting, setSubmitting] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -160,7 +160,7 @@ export default function StudentsPage() {
 
   function openAdd() {
     setEditingStudent(null);
-    setForm({ name: "", email: "+91 ", student_phone: "+91 ", class_id: "", section_id: "", parent_name: "", parent_phone: "+91 ", admission_date: "", monthly_fee: "", fee_frequency: "MONTHLY", due_date: "" });
+    setForm({ name: "", email: "", student_phone: "+91 ", class_id: "", section_id: "", parent_name: "", parent_phone: "+91 ", admission_date: "", monthly_fee: "", fee_frequency: "MONTHLY", due_date: "" });
     setModalOpen(true);
   }
   function openEdit(s) {
@@ -563,8 +563,11 @@ export default function StudentsPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Email / Phone</label>
-                <input required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="input-field" placeholder="email or +91..." />
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Email <span className="text-gray-300">/ Phone</span></label>
+                <input required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="input-field" placeholder="student@email.com" />
+                <p className="text-[11px] text-blue-600 mt-1.5 leading-snug">
+                  This becomes the student's <span className="font-semibold">login ID</span>. Enter their email to let them sign in. A phone number stores contact only and cannot log in.
+                </p>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Admission Date</label>

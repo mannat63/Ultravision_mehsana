@@ -17,6 +17,12 @@ export async function GET(req) {
       const studentProfile = await Student.findOne({ user_id: authUser._id }).lean();
       if (!studentProfile) return NextResponse.json({ unread_count: 0 }, { status: 200 });
       query.student_id = studentProfile._id;
+
+      // Don't count fee reminders toward the badge while fees are hidden from students.
+      const { feesVisibleToStudents } = await import("@/lib/feeVisibility");
+      if (!(await feesVisibleToStudents(authUser.institute_id))) {
+        query.type = { $ne: "FEE_REMINDER" };
+      }
     }
 
     const unread_count = await Notification.countDocuments(query);

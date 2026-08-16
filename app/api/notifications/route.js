@@ -45,8 +45,16 @@ export async function GET(req) {
     const { default: Settings } = await import("@/models/Settings");
     const settings = await Settings.findOne({ institute_id: authUser.institute_id }).lean();
     const razorpay_link = settings?.razorpay_link || "";
+    const feesHidden = settings?.show_fees_to_students !== true;
 
-    const finalNotifications = notifications.map(n => ({
+    // While fees are hidden from students/parents, keep FEE_REMINDER notifications
+    // out of what students and teachers see (admins still see everything).
+    const visibleNotifications =
+      feesHidden && authUser.role !== "ADMIN"
+        ? notifications.filter(n => n.type !== "FEE_REMINDER")
+        : notifications;
+
+    const finalNotifications = visibleNotifications.map(n => ({
       ...n,
       action_link: n.type === 'FEE_REMINDER' 
         ? razorpay_link 

@@ -507,6 +507,7 @@ export default function FeesPage() {
   const [sections, setSections] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [role, setRole]         = useState("");
+  const [showFees, setShowFees] = useState(true);
   const [search, setSearch]     = useState("");
   const [filter, setFilter]     = useState("ALL"); // ALL | OVERDUE | UPCOMING | CLEAR
   
@@ -545,6 +546,7 @@ export default function FeesPage() {
     setSections(Array.isArray(sec) ? sec : []);
     if (dRes && Array.isArray(dRes)) setDefaulters(dRes);
     setRole(m?.role || "STUDENT");
+    setShowFees(m?.showFeesToStudents !== false);
     setLoading(false);
   }
 
@@ -663,6 +665,23 @@ export default function FeesPage() {
       </div>
     </div>
   );
+
+  // Fees are hidden from students/parents unless the academy turns the section on.
+  if (role === "STUDENT" && !showFees) {
+    return (
+      <div className="max-w-lg mx-auto mt-16 text-center">
+        <div className="card py-12 px-8">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center mb-5">
+            <Wallet size={26} className="text-slate-400" />
+          </div>
+          <h1 className="text-lg font-bold text-gray-900">Fees are managed by the academy office</h1>
+          <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+            Fee details aren't shown here. For any questions about payments, please contact the academy office directly.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">

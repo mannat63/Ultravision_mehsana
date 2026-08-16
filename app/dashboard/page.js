@@ -370,7 +370,8 @@ export default function DashboardPage() {
             { label: "Attendance", value: stats.attendancePct != null ? `${stats.attendancePct}%` : `${stats.presentCount}/${stats.totalAttendanceDays}`, Icon: CalendarCheck },
             { label: "Avg Marks", value: stats.avgMarks != null ? `${stats.avgMarks}%` : "—", Icon: BarChart3 },
             { label: "Section Rank", value: stats.rank ? `#${stats.rank}` : "—", Icon: Award, sub: stats.totalInSection ? `of ${stats.totalInSection}` : null },
-            { label: "Pending Fees", value: `₹${(stats.pendingFees || 0).toLocaleString()}`, Icon: Wallet },
+            // Fees are hidden from students unless the academy enables them.
+            ...(stats.showFeesToStudents ? [{ label: "Pending Fees", value: `₹${(stats.pendingFees || 0).toLocaleString()}`, Icon: Wallet }] : []),
           ].map((c, i) => (
             <div key={i} className="bg-white border border-gray-100 rounded-[24px] p-5 flex flex-col justify-between transition-all duration-300 hover:translate-y-[-2px] text-gray-800" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
               <div className="flex items-center gap-3 mb-2">

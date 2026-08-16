@@ -26,6 +26,14 @@ export async function POST(req) {
     const settings = await Settings.findOne({ institute_id: authUser.institute_id }).lean();
     const razorpay_link = settings?.razorpay_link || "";
 
+    // Fee section is hidden from students/parents → suppress all outgoing fee reminders.
+    if (settings?.show_fees_to_students !== true) {
+      return NextResponse.json(
+        { error: "Fee reminders are off. Turn on \"Show Fees to Students\" in Settings to send them." },
+        { status: 403 }
+      );
+    }
+
     for (const fee of fees) {
       if (!fee.parent_phone || fee.parent_phone === "—") {
         errors.push(`Skipped ${fee.name}: No valid phone number.`);

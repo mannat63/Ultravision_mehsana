@@ -5,6 +5,10 @@ const SettingsSchema = new mongoose.Schema(
     institute_id: { type: mongoose.Schema.Types.ObjectId, ref: "Institute", required: true, unique: true },
     feeReminders: { type: Boolean, default: true },
     attendanceAlerts: { type: Boolean, default: true },
+    // When false, the entire fee section is hidden from students/parents:
+    // fee UI in student app, report cards, and all outgoing fee reminders.
+    // Fee data is never deleted — flip this to true to restore everything.
+    show_fees_to_students: { type: Boolean, default: false },
     razorpay_link: { type: String, default: "" },
     google_drive_link: { type: String, default: "" },
     google_drive_instructions: { type: String, default: "Keep folder open and accessible. Share with teachers via this link." },

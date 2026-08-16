@@ -19,6 +19,17 @@ export async function POST(req) {
       );
     }
 
+    // Fee section hidden from students/parents → suppress fee reminders (other risk types still send).
+    if (risk_type === "fees") {
+      const { feesVisibleToStudents } = await import("@/lib/feeVisibility");
+      if (!(await feesVisibleToStudents(authUser.institute_id))) {
+        return NextResponse.json(
+          { success: false, error: "Fee reminders are turned off. Enable \"Show fees to students\" in Settings to send them." },
+          { status: 409 }
+        );
+      }
+    }
+
     const student = await Student.findById(student_id)
       .populate("user_id", "name phoneOrEmail")
       .populate("section_id", "name")

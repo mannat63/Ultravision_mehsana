@@ -304,8 +304,12 @@ export async function GET() {
       const strongTopics = subjectList.filter(s => s.avgPct >= 70).slice(0, 5);
       const weakTopics = subjectList.filter(s => s.avgPct < 70).sort((a, b) => a.avgPct - b.avgPct).slice(0, 5);
 
+      const { feesVisibleToStudents } = await import("@/lib/feeVisibility");
+      const showFeesToStudents = await feesVisibleToStudents(authUser.institute_id);
+
       return NextResponse.json({
-        pendingFees: feeAgg[0]?.pending || 0,
+        showFeesToStudents,
+        pendingFees: showFeesToStudents ? (feeAgg[0]?.pending || 0) : null,
         presentCount: attAgg[0]?.present || 0,
         totalAttendanceDays: attAgg[0]?.total || 0,
         attendancePct: attAgg[0]?.total > 0 ? Math.round((attAgg[0].present / attAgg[0].total) * 1000) / 10 : null,

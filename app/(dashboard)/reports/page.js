@@ -187,17 +187,27 @@ export default function ReportsPage() {
 
       y += 6;
 
-      // Summary KPIs
+      // Summary KPIs — fee column only when fees are shown to students.
       y = addSectionTitle(doc, "Performance Summary", y);
       y = addTable(doc, {
         startY: y,
-        head: ["Attendance", "Days Present", "Test Average", "Outstanding Fees"],
-        body: [[
-          `${report.attendance?.percentage || 0}%`,
-          `${report.attendance?.present || 0} / ${report.attendance?.total_days || 0}`,
-          `${report.tests?.percentage || 0}%`,
-          `Rs ${(report.fees?.due || 0).toLocaleString()}`,
-        ]],
+        head: report.fees
+          ? ["Attendance", "Days Present", "Test Average", "Outstanding Fees"]
+          : ["Attendance", "Days Present", "Test Average"],
+        body: [
+          report.fees
+            ? [
+                `${report.attendance?.percentage || 0}%`,
+                `${report.attendance?.present || 0} / ${report.attendance?.total_days || 0}`,
+                `${report.tests?.percentage || 0}%`,
+                `Rs ${(report.fees?.due || 0).toLocaleString()}`,
+              ]
+            : [
+                `${report.attendance?.percentage || 0}%`,
+                `${report.attendance?.present || 0} / ${report.attendance?.total_days || 0}`,
+                `${report.tests?.percentage || 0}%`,
+              ],
+        ],
       });
 
       y += 6;
@@ -537,11 +547,13 @@ export default function ReportsPage() {
                   <div className="text-3xl font-black text-violet-700 print:text-gray-900">{report.tests?.percentage || 0}%</div>
                   <div className="text-[10px] font-bold text-violet-500 uppercase tracking-widest mt-1 print:text-gray-500">Test Average</div>
                 </div>
-                {/* Fees */}
-                <div className={`text-center p-4 rounded-xl border print:bg-white print:border-gray-200 ${report.fees?.due > 0 ? "bg-red-50 border-red-100" : "bg-gray-50 border-gray-200"}`}>
-                  <div className={`text-3xl font-black ${report.fees?.due > 0 ? "text-red-600" : "text-emerald-700"} print:text-gray-900`}>₹{(report.fees?.due || 0).toLocaleString()}</div>
-                  <div className={`text-[10px] font-bold uppercase tracking-widest mt-1 ${report.fees?.due > 0 ? "text-red-400" : "text-gray-400"} print:text-gray-500`}>Outstanding</div>
-                </div>
+                {/* Fees — hidden when the academy doesn't show fees to students */}
+                {report.fees && (
+                  <div className={`text-center p-4 rounded-xl border print:bg-white print:border-gray-200 ${report.fees?.due > 0 ? "bg-red-50 border-red-100" : "bg-gray-50 border-gray-200"}`}>
+                    <div className={`text-3xl font-black ${report.fees?.due > 0 ? "text-red-600" : "text-emerald-700"} print:text-gray-900`}>₹{(report.fees?.due || 0).toLocaleString()}</div>
+                    <div className={`text-[10px] font-bold uppercase tracking-widest mt-1 ${report.fees?.due > 0 ? "text-red-400" : "text-gray-400"} print:text-gray-500`}>Outstanding</div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -570,7 +582,8 @@ export default function ReportsPage() {
                   </div>
                 </div>
 
-                {/* Financial Detail */}
+                {/* Financial Detail — hidden when fees aren't shown to students */}
+                {report.fees && (
                 <div>
                   <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-2 mb-4">
                     <Wallet size={14} className="text-gray-400" /> Financial Summary
@@ -590,6 +603,7 @@ export default function ReportsPage() {
                     </div>
                   </div>
                 </div>
+                )}
               </div>
             </div>
 

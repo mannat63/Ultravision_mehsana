@@ -81,6 +81,28 @@ export default function AutomationPage() {
     }
   }
 
+  async function toggleFeeVisibility(next) {
+    const prev = settings?.show_fees_to_students === true;
+    setSettings((s) => ({ ...s, show_fees_to_students: next })); // optimistic
+    const id = toast.loading("Saving…");
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ show_fees_to_students: next }),
+      });
+      if (res.ok) {
+        toast.success(next ? "Fees are now visible to students" : "Fees hidden from students", { id });
+      } else {
+        setSettings((s) => ({ ...s, show_fees_to_students: prev })); // rollback
+        toast.error("Failed to save", { id });
+      }
+    } catch {
+      setSettings((s) => ({ ...s, show_fees_to_students: prev }));
+      toast.error("Network error", { id });
+    }
+  }
+
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto space-y-5">
@@ -89,6 +111,8 @@ export default function AutomationPage() {
       </div>
     );
   }
+
+  const feesVisible = settings?.show_fees_to_students === true;
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -172,6 +196,38 @@ export default function AutomationPage() {
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* ── Fee Visibility for Students ── */}
+      <div className="card border border-gray-200 shadow-sm">
+        <div className="flex items-start gap-4">
+          <div className="p-2.5 bg-slate-100 text-slate-600 rounded-md flex-shrink-0">
+            <Bell size={20} strokeWidth={1.8} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-gray-800">Show Fees to Students &amp; Parents</div>
+            <div className="text-sm text-gray-500 mt-0.5">
+              When off, the entire fee section is hidden from students/parents — fee pages,
+              report-card figures, and all fee reminders are suppressed. Your admin fee records
+              stay fully intact; turning this back on restores everything instantly.
+            </div>
+          </div>
+          {/* Toggle switch */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={feesVisible}
+            onClick={() => toggleFeeVisibility(!feesVisible)}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${feesVisible ? "bg-emerald-500" : "bg-gray-300"}`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${feesVisible ? "translate-x-5" : "translate-x-0.5"}`} />
+          </button>
+        </div>
+        <div className="pl-16 mt-3">
+          <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide px-2 py-1 rounded ${feesVisible ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-gray-100 text-gray-500 border border-gray-200"}`}>
+            {feesVisible ? "Visible to students" : "Hidden from students"}
+          </span>
         </div>
       </div>
 

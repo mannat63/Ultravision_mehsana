@@ -36,6 +36,7 @@ export async function POST(req) {
     } else {
       if (body.feeReminders !== undefined) settings.feeReminders = body.feeReminders;
       if (body.attendanceAlerts !== undefined) settings.attendanceAlerts = body.attendanceAlerts;
+      if (body.show_fees_to_students !== undefined) settings.show_fees_to_students = !!body.show_fees_to_students;
       if (body.razorpay_link !== undefined) settings.razorpay_link = body.razorpay_link;
       if (body.google_drive_link !== undefined) settings.google_drive_link = body.google_drive_link;
       if (body.google_drive_instructions !== undefined) settings.google_drive_instructions = body.google_drive_instructions;

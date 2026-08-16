@@ -87,7 +87,7 @@ function AvatarDropdown({ userName, role }) {
   );
 }
 
-export default function DashboardLayoutClient({ children, role, userName }) {
+export default function DashboardLayoutClient({ children, role, userName, showFees = false }) {
   const pathname = usePathname();
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -140,13 +140,14 @@ export default function DashboardLayoutClient({ children, role, userName }) {
         <Sidebar
           role={role}
           userName={userName}
+          showFees={showFees}
           onOpenNotification={() => setIsNotifOpen(true)}
         />
       </div>
 
       {/* Mobile Bottom Bar (rendered by Sidebar component) */}
       <div className="md:hidden">
-        <Sidebar role={role} userName={userName} />
+        <Sidebar role={role} userName={userName} showFees={showFees} />
       </div>
 
       {/* Content Area */}
