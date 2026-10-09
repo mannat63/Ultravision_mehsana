@@ -40,3 +40,10 @@ debug-teacher.json
 # Temporary scripts
 tmp/
 scripts/reset-and-seed.js
+.env*
+
+# Backups / database dumps (never commit)
+backups/
+*.dump
+*.bson
+*.archive

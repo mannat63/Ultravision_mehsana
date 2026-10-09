@@ -8,6 +8,17 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
+  // Clerk runs only where its key is present (production/preview). Locally we
+  // test Supabase Auth without Clerk keys, so wrap conditionally.
+  const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
+  const inner = (
+    <>
+      {children}
+      <Analytics />
+    </>
+  );
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -15,10 +26,7 @@ export default function RootLayout({ children }) {
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body suppressHydrationWarning>
-        <ClerkProvider>
-          {children}
-          <Analytics />
-        </ClerkProvider>
+        {clerkEnabled ? <ClerkProvider>{inner}</ClerkProvider> : inner}
       </body>
     </html>
   );

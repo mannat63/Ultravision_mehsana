@@ -1,23 +1,31 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { getCurrentIdentity } from "@/lib/auth";
 import dbConnect from "@/lib/db/mongodb";
 import User from "@/models/User";
 import Institute from "@/models/Institute";
 
 // POST /api/onboard
-// First-time setup: creates an Institute + Admin user linked to the current Clerk user.
-// This should only be called once per institute.
+// First-time setup: creates an Institute + Admin user linked to the current
+// auth session (Supabase or Clerk). This should only be called once per institute.
 export async function POST(req) {
   try {
     await dbConnect();
 
-    const { userId } = await auth();
-    if (!userId) {
+    const identity = await getCurrentIdentity();
+    if (!identity) {
       return NextResponse.json({ error: "Unauthorized — please sign in first" }, { status: 401 });
     }
+    const idField = identity.provider === "supabase" ? "supabase_id" : "clerk_id";
 
-    // Check if this Clerk user already has a profile
-    const existingUser = await User.findOne({ clerk_id: userId });
+    // Check if this auth user already has a profile (by provider id or email)
+    const existingUser = await User.findOne({
+      $or: [
+        { [idField]: identity.providerId },
+        ...(identity.email
+          ? [{ phoneOrEmail: new RegExp(`^${identity.email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") }]
+          : []),
+      ],
+    });
     if (existingUser) {
       return NextResponse.json({
         message: "You are already onboarded!",
@@ -47,13 +55,13 @@ export async function POST(req) {
       phone,
     });
 
-    // 2. Create the Admin user linked to the Clerk session
+    // 2. Create the Admin user linked to the current auth session
     const adminUser = await User.create({
       name: owner_name,
       phoneOrEmail: admin_email || phone,
       role: "ADMIN",
       institute_id: institute._id,
-      clerk_id: userId,
+      [idField]: identity.providerId,
     });
 
     return NextResponse.json(
@@ -74,12 +82,20 @@ export async function GET() {
   try {
     await dbConnect();
 
-    const { userId } = await auth();
-    if (!userId) {
+    const identity = await getCurrentIdentity();
+    if (!identity) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const idField = identity.provider === "supabase" ? "supabase_id" : "clerk_id";
 
-    const user = await User.findOne({ clerk_id: userId });
+    const user = await User.findOne({
+      $or: [
+        { [idField]: identity.providerId },
+        ...(identity.email
+          ? [{ phoneOrEmail: new RegExp(`^${identity.email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") }]
+          : []),
+      ],
+    });
     if (!user) {
       return NextResponse.json({ onboarded: false, message: "Not onboarded yet. POST to /api/onboard to set up." });
     }

@@ -1,10 +1,10 @@
 "use client";
 
-import { SignOutButton } from "@clerk/nextjs";
+import { signOutEverywhere } from "@/lib/supabase/signOut";
 import { ShieldAlert, LogOut } from "lucide-react";
 
 /**
- * Shown when a signed-in Clerk account isn't linked to any student/teacher/admin
+ * Shown when a signed-in account isn't linked to any student/teacher/admin
  * record (e.g. a student signed in with a Google email the academy never added).
  * Gives a clear explanation and — critically — a working Sign-out button so the
  * user can switch accounts instead of being stuck on a blank error screen.
@@ -29,11 +29,9 @@ export default function AccessDenied({ message }) {
         </p>
 
         <div className="mt-6 flex flex-col gap-2">
-          <SignOutButton redirectUrl="/">
-            <button className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-colors">
-              <LogOut size={15} /> Sign out & try another account
-            </button>
-          </SignOutButton>
+          <button onClick={signOutEverywhere} className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-colors">
+            <LogOut size={15} /> Sign out & try another account
+          </button>
           <a
             href="https://wa.me/919509728788?text=I%20need%20help%20logging%20into%20UltraVision%20Academy"
             target="_blank"

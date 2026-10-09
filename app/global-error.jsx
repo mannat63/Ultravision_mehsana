@@ -19,10 +19,17 @@ export default function GlobalError({ error, reset }) {
     }).catch(() => {});
   }, [error]);
 
-  // global-error replaces the root layout (ClerkProvider is unmounted here), so we
-  // can't use Clerk hooks. window.Clerk is still attached by the loaded SDK — use it
-  // if present to clear the session, then fall back to just navigating home.
+  // global-error replaces the root layout (providers are unmounted here), so we
+  // can't use auth hooks. Clear both sessions best-effort, then navigate home.
   async function signOut() {
+    try {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+      if (url && key) {
+        const { createBrowserClient } = await import('@supabase/ssr');
+        await createBrowserClient(url, key).auth.signOut();
+      }
+    } catch {}
     try {
       if (typeof window !== 'undefined' && window.Clerk?.signOut) {
         await window.Clerk.signOut();

@@ -2,6 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { SignInButton } from "@clerk/nextjs";
+import { createSupabaseBrowserClient, supabaseEnabled } from "@/lib/supabase/client";
+
+const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
+async function signInWithGoogleSupabase() {
+  const supabase = createSupabaseBrowserClient();
+  await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: `${window.location.origin}/auth/callback` },
+  });
+}
 
 const features = [
   { text: "Real-time Analytics & Insights" },
@@ -152,15 +163,27 @@ export default function LoginClient() {
               <div className="login-divider-line" />
             </div>
 
-            <SignInButton mode="modal">
-              <button className="login-google-btn" id="login-google-signin">
+            {supabaseEnabled && (
+              <button className="login-google-btn" id="login-google-signin-supabase" onClick={signInWithGoogleSupabase}>
                 <GoogleLogo size={22} />
                 <span>Continue with Google</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="login-google-arrow">
                   <path d="M5 12h14M12 5l7 7-7 7"/>
                 </svg>
               </button>
-            </SignInButton>
+            )}
+
+            {clerkEnabled && (
+              <SignInButton mode="modal">
+                <button className="login-google-btn" id="login-google-signin" style={supabaseEnabled ? { marginTop: "10px", opacity: 0.85 } : undefined}>
+                  <GoogleLogo size={22} />
+                  <span>{supabaseEnabled ? "Continue with Google (Legacy)" : "Continue with Google"}</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="login-google-arrow">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
+                </button>
+              </SignInButton>
+            )}
 
             {/* Trust indicators */}
             <div className="login-trust">

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { ArrowRight } from "lucide-react";
 
+const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
 export default function OnboardPage() {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -49,7 +51,7 @@ export default function OnboardPage() {
       </div>
 
       <div className="absolute top-6 right-6">
-        <UserButton />
+        {clerkEnabled && <UserButton />}
       </div>
 
       <div className="max-w-md w-full bg-white rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.06)] border border-gray-200/70 p-8 relative z-10">
