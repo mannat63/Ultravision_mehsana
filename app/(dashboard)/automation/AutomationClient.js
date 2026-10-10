@@ -1,0 +1,607 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
+import {
+  Settings, Bell, CalendarCheck, Zap, Send,
+  GraduationCap, AlertTriangle, CheckCircle, Layers, ArrowRight,
+  Database, Users, UserPlus, BookOpen, ClipboardList, BarChart3,
+  FolderOpen, ExternalLink, Info
+} from "lucide-react";
+
+// role is resolved server-side in page.js. Students never reach this component.
+// Teachers see ONLY the low-risk Google Drive homework folder (read-only).
+// Admins see the full configuration. All destructive APIs are also ADMIN-gated
+// server-side — this is defence-in-depth for the UI.
+export default function AutomationClient({ role }) {
+  const isAdmin = role === "ADMIN";
+
+  const [settings, setSettings] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const [promoting, setPromoting] = useState(false);
+  const [promotionResult, setPromotionResult] = useState(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const [seeding, setSeeding] = useState(false);
+  const [seedResult, setSeedResult] = useState(null);
+  const [showSeedConfirm, setShowSeedConfirm] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then(setSettings)
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handlePromotion() {
+    setShowConfirm(false);
+    setPromoting(true);
+    setPromotionResult(null);
+    const id = toast.loading("Promoting all students…");
+    try {
+      const res = await fetch("/api/promote-students", { method: "POST" });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setPromotionResult(data);
+        toast.success(`${data.promoted} students promoted!`, { id });
+      } else {
+        toast.error(data.error || "Promotion failed", { id });
+      }
+    } catch {
+      toast.error("Network error during promotion", { id });
+    }
+    setPromoting(false);
+  }
+
+  async function saveDriveSettings() {
+    const id = toast.loading("Saving…");
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          google_drive_link: settings?.google_drive_link,
+          google_drive_instructions: settings?.google_drive_instructions,
+        }),
+      });
+      if (res.ok) toast.success("Drive settings saved!", { id });
+      else toast.error("Failed to save", { id });
+    } catch {
+      toast.error("Network error", { id });
+    }
+  }
+
+  async function saveRazorpay() {
+    const id = toast.loading("Saving…");
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ razorpay_link: settings?.razorpay_link }),
+      });
+      if (res.ok) toast.success("Saved!", { id });
+      else toast.error("Failed to save", { id });
+    } catch {
+      toast.error("Network error", { id });
+    }
+  }
+
+  async function toggleFeeVisibility(next) {
+    const prev = settings?.show_fees_to_students === true;
+    setSettings((s) => ({ ...s, show_fees_to_students: next })); // optimistic
+    const id = toast.loading("Saving…");
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ show_fees_to_students: next }),
+      });
+      if (res.ok) {
+        toast.success(next ? "Fees are now visible to students" : "Fees hidden from students", { id });
+      } else {
+        setSettings((s) => ({ ...s, show_fees_to_students: prev })); // rollback
+        toast.error("Failed to save", { id });
+      }
+    } catch {
+      setSettings((s) => ({ ...s, show_fees_to_students: prev }));
+      toast.error("Network error", { id });
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-5">
+        <div className="h-8 w-40 animate-shimmer rounded-lg" />
+        {[1, 2, 3].map((i) => <div key={i} className="h-28 animate-shimmer rounded-lg" />)}
+      </div>
+    );
+  }
+
+  const feesVisible = settings?.show_fees_to_students === true;
+
+  // ───────────────────────── TEACHER VIEW (low-risk only) ─────────────────────────
+  if (!isAdmin) {
+    const driveLink = settings?.google_drive_link || "";
+    const driveInstructions = settings?.google_drive_instructions || "";
+    return (
+      <div className="max-w-2xl mx-auto space-y-4">
+        <div>
+          <h1 className="page-title flex items-center gap-2.5">
+            <Settings size={20} className="text-slate-500" strokeWidth={1.8} />
+            Settings
+          </h1>
+          <p className="page-subtitle mt-1">Homework resources shared by your academy.</p>
+        </div>
+
+        {/* ── Google Drive — Homework Folder (read-only for teachers) ── */}
+        <div className="card border border-gray-200 shadow-sm">
+          <div className="flex items-start gap-4 mb-5">
+            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-md flex-shrink-0">
+              <FolderOpen size={20} strokeWidth={1.8} />
+            </div>
+            <div className="flex-1">
+              <div className="font-semibold text-gray-800">Google Drive — Homework Folder</div>
+              <div className="text-sm text-gray-500 mt-0.5">
+                The shared Drive folder your academy configured for uploading and attaching homework files.
+              </div>
+            </div>
+          </div>
+
+          <div className="pl-16 space-y-4">
+            {driveLink ? (
+              <a
+                href={driveLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-primary inline-flex items-center gap-1.5 w-max"
+              >
+                <ExternalLink size={14} /> Open Homework Folder
+              </a>
+            ) : (
+              <div className="text-sm text-gray-400 italic">
+                No homework folder has been configured by your academy yet.
+              </div>
+            )}
+
+            {driveInstructions && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Instructions
+                </label>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 border border-gray-100 rounded-lg p-3">
+                  {driveInstructions}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ───────────────────────── ADMIN VIEW (full configuration) ─────────────────────────
+  return (
+    <div className="max-w-2xl mx-auto space-y-4">
+      {/* Header */}
+      <div>
+        <h1 className="page-title flex items-center gap-2.5">
+          <Settings size={20} className="text-slate-500" strokeWidth={1.8} />
+          Settings
+        </h1>
+        <p className="page-subtitle mt-1">System configuration, automation controls, and academic workflows.</p>
+      </div>
+
+      {/* ── Academic Year Promotion ── */}
+      <div className="card border border-gray-200 shadow-sm">
+        <div className="flex items-start gap-4 mb-4">
+          <div className="p-2.5 bg-slate-100 text-slate-600 rounded-md flex-shrink-0">
+            <GraduationCap size={20} strokeWidth={1.8} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-gray-800">Academic Year Promotion</div>
+            <div className="text-sm text-gray-500 mt-0.5">
+              Promote all students to the next class at end of academic year. Students in Class 12 will be graduated.
+            </div>
+          </div>
+        </div>
+
+        {/* Flow indicator */}
+        <div className="flex items-center gap-1.5 flex-wrap mb-5 pl-16">
+          {["Class 8", "9", "10", "11", "12", "Graduated"].map((step, i, arr) => (
+            <span key={i} className="flex items-center gap-1.5">
+              <span className="text-[11px] font-semibold text-gray-500 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded">
+                {step}
+              </span>
+              {i < arr.length - 1 && <ArrowRight size={10} className="text-gray-300 flex-shrink-0" />}
+            </span>
+          ))}
+        </div>
+
+        <div className="pl-16 space-y-3">
+          {!showConfirm ? (
+            <button
+              onClick={() => setShowConfirm(true)}
+              disabled={promoting}
+              className="btn-primary disabled:opacity-50"
+            >
+              <GraduationCap size={15} strokeWidth={2} />
+              {promoting ? "Promoting…" : "Promote All Students"}
+            </button>
+          ) : (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
+              <AlertTriangle size={15} className="text-amber-500 flex-shrink-0" />
+              <span className="text-sm font-medium text-amber-800 flex-1">
+                This will move every student up one class. Confirm?
+              </span>
+              <div className="flex gap-2 flex-shrink-0">
+                <button onClick={() => setShowConfirm(false)} className="btn-secondary text-xs !py-1.5">Cancel</button>
+                <button onClick={handlePromotion} className="btn-primary text-xs !py-1.5">Confirm</button>
+              </div>
+            </div>
+          )}
+
+          {/* Result */}
+          {promotionResult && (
+            <div className="border border-gray-100 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                <CheckCircle size={14} className="text-emerald-500" />
+                <span className="text-xs font-semibold text-gray-700">Promotion complete</span>
+                <span className="ml-auto text-xs text-gray-500">
+                  {promotionResult.promoted} promoted · {promotionResult.graduated} graduated
+                </span>
+              </div>
+              <div className="divide-y divide-gray-100 max-h-40 overflow-y-auto">
+                {promotionResult.report.map((r, i) => (
+                  <div key={i} className="flex items-center justify-between px-4 py-2 text-xs">
+                    <span className="text-gray-700 font-medium">{r.class} {r.section ? `· ${r.section}` : ""}</span>
+                    <span className={`font-semibold ${r.action === "graduated" ? "text-amber-600" : "text-emerald-600"}`}>
+                      {r.action === "graduated" ? `${r.count} graduated` : `${r.count} promoted`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Fee Visibility for Students ── */}
+      <div className="card border border-gray-200 shadow-sm">
+        <div className="flex items-start gap-4">
+          <div className="p-2.5 bg-slate-100 text-slate-600 rounded-md flex-shrink-0">
+            <Bell size={20} strokeWidth={1.8} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-gray-800">Show Fees to Students &amp; Parents</div>
+            <div className="text-sm text-gray-500 mt-0.5">
+              When off, the entire fee section is hidden from students/parents — fee pages,
+              report-card figures, and all fee reminders are suppressed. Your admin fee records
+              stay fully intact; turning this back on restores everything instantly.
+            </div>
+          </div>
+          {/* Toggle switch */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={feesVisible}
+            onClick={() => toggleFeeVisibility(!feesVisible)}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${feesVisible ? "bg-emerald-500" : "bg-gray-300"}`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${feesVisible ? "translate-x-5" : "translate-x-0.5"}`} />
+          </button>
+        </div>
+        <div className="pl-16 mt-3">
+          <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide px-2 py-1 rounded ${feesVisible ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-gray-100 text-gray-500 border border-gray-200"}`}>
+            {feesVisible ? "Visible to students" : "Hidden from students"}
+          </span>
+        </div>
+      </div>
+
+      {/* ── Payment Gateway Link ── */}
+      <div className="card border border-gray-200 shadow-sm">
+        <div className="flex items-start gap-4 mb-5">
+          <div className="p-2.5 bg-slate-100 text-slate-600 rounded-md flex-shrink-0">
+            <Send size={20} strokeWidth={1.8} />
+          </div>
+          <div>
+            <div className="font-semibold text-gray-800">Payment Gateway Link</div>
+            <div className="text-sm text-gray-500 mt-0.5">Razorpay link sent to students in fee reminder notifications.</div>
+          </div>
+        </div>
+        <div className="pl-16 flex gap-3">
+          <input
+            type="url"
+            placeholder="https://rzp.io/your-link"
+            value={settings?.razorpay_link || ""}
+            onChange={(e) => setSettings({ ...settings, razorpay_link: e.target.value })}
+            className="input-field flex-1"
+          />
+          <button onClick={saveRazorpay} className="btn-primary whitespace-nowrap">Save</button>
+        </div>
+      </div>
+
+      {/* ── Google Drive Integration ── */}
+      <div className="card border border-gray-200 shadow-sm">
+        <div className="flex items-start gap-4 mb-5">
+          <div className="p-2.5 bg-blue-50 text-blue-600 rounded-md flex-shrink-0">
+            <FolderOpen size={20} strokeWidth={1.8} />
+          </div>
+          <div className="flex-1">
+            <div className="font-semibold text-gray-800">Google Drive — Homework Folder</div>
+            <div className="text-sm text-gray-500 mt-0.5">
+              Share a Drive folder link with teachers so they can upload and attach homework files.
+            </div>
+          </div>
+        </div>
+
+        <div className="pl-16 space-y-4">
+          {/* Folder link */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+              Google Drive Folder Link
+            </label>
+            <div className="flex gap-3">
+              <input
+                type="url"
+                placeholder="https://drive.google.com/drive/folders/..."
+                value={settings?.google_drive_link || ""}
+                onChange={(e) => setSettings({ ...settings, google_drive_link: e.target.value })}
+                className="input-field flex-1"
+              />
+              {settings?.google_drive_link && (
+                <a href={settings.google_drive_link} target="_blank" rel="noopener noreferrer" className="btn-secondary flex items-center gap-1.5 whitespace-nowrap">
+                  <ExternalLink size={13} /> Open
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Instructions */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+              Instructions for Teachers
+            </label>
+            <textarea
+              rows={3}
+              placeholder="e.g. Keep this folder open and accessible. Upload files as PDF. Name files as: Subject_ClassName_Date.pdf"
+              value={settings?.google_drive_instructions || ""}
+              onChange={(e) => setSettings({ ...settings, google_drive_instructions: e.target.value })}
+              className="input-field resize-none text-sm"
+            />
+          </div>
+
+          {/* Tips */}
+          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 flex items-start gap-2">
+            <Info size={13} className="text-blue-500 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-blue-700">
+              <strong>Setup tips:</strong> In Google Drive, right-click the folder → Share → Change to "Anyone with the link can edit". This lets all teachers upload files without needing individual permissions.
+            </p>
+          </div>
+
+          <button onClick={saveDriveSettings} className="btn-primary">Save Drive Settings</button>
+        </div>
+      </div>
+
+      {/* ── Demo Data ── */}
+      <div className="card border border-indigo-100 shadow-sm">
+        <div className="flex items-start gap-4 mb-4">
+          <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-md flex-shrink-0">
+            <Database size={20} strokeWidth={1.8} />
+          </div>
+          <div className="flex-1">
+            <div className="font-semibold text-gray-800">Seed Realistic Demo Data</div>
+            <div className="text-sm text-gray-500 mt-0.5">
+              Populate the system with a full coaching institute dataset for demos and analytics testing.
+            </div>
+          </div>
+        </div>
+
+        {/* What gets seeded */}
+        <div className="pl-16 mb-5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {[
+              { icon: Users, label: "180 Students", sub: "6 batches · JEE, NEET, Foundation" },
+              { icon: GraduationCap, label: "12 Teachers", sub: "Physics, Chem, Maths, Bio…" },
+              { icon: UserPlus, label: "150 Leads", sub: "Full CRM pipeline" },
+              { icon: ClipboardList, label: "40 Tests", sub: "~1200+ result records" },
+              { icon: CalendarCheck, label: "~8000 Attendance", sub: "46 school days" },
+              { icon: BarChart3, label: "180 Fee Records", sub: "Paid, partial, overdue" },
+            ].map(({ icon: Icon, label, sub }, i) => (
+              <div key={i} className="flex items-start gap-2 p-2.5 bg-gray-50 border border-gray-100 rounded-lg">
+                <Icon size={13} className="text-indigo-500 mt-0.5 shrink-0" strokeWidth={2} />
+                <div>
+                  <div className="text-[11px] font-bold text-gray-800">{label}</div>
+                  <div className="text-[10px] text-gray-400">{sub}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-amber-600 font-medium mt-3 flex items-center gap-1">
+            <AlertTriangle size={10} /> Existing students, teachers, and records will be wiped first.
+          </p>
+        </div>
+
+        <div className="pl-16 space-y-3">
+          {!showSeedConfirm ? (
+            <button
+              onClick={() => setShowSeedConfirm(true)}
+              disabled={seeding}
+              className="btn-primary disabled:opacity-50"
+            >
+              <Database size={15} />
+              {seeding ? "Seeding… this takes ~30 seconds" : "Seed Demo Data"}
+            </button>
+          ) : (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
+              <AlertTriangle size={15} className="text-amber-500 flex-shrink-0" />
+              <span className="text-sm font-medium text-amber-800 flex-1">
+                This will replace all existing data with demo data. Continue?
+              </span>
+              <div className="flex gap-2 flex-shrink-0">
+                <button onClick={() => setShowSeedConfirm(false)} className="btn-secondary text-xs !py-1.5">Cancel</button>
+                <button
+                  onClick={async () => {
+                    setShowSeedConfirm(false);
+                    setSeeding(true);
+                    setSeedResult(null);
+                    const toastId = toast.loading("Seeding demo data… (~30 sec)");
+                    try {
+                      const res = await fetch("/api/seed/demo", { method: "POST" });
+                      const data = await res.json();
+                      if (res.ok && data.success) {
+                        setSeedResult(data.stats);
+                        toast.success("Demo data seeded successfully!", { id: toastId });
+                      } else {
+                        toast.error(data.error || "Seed failed", { id: toastId });
+                      }
+                    } catch {
+                      toast.error("Network error — check server logs", { id: toastId });
+                    }
+                    setSeeding(false);
+                  }}
+                  className="btn-primary text-xs !py-1.5"
+                >
+                  Confirm & Seed
+                </button>
+              </div>
+            </div>
+          )}
+
+          {seeding && (
+            <div className="flex items-center gap-3 p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
+              <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin shrink-0" />
+              <div className="text-xs text-indigo-700 font-medium">
+                Generating 180 students, 8000 attendance records, 150 leads… please wait.
+              </div>
+            </div>
+          )}
+
+          {seedResult && (
+            <div className="border border-emerald-200 rounded-lg overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border-b border-emerald-100">
+                <CheckCircle size={14} className="text-emerald-500" />
+                <span className="text-xs font-semibold text-gray-700">Seed complete</span>
+                <span className="ml-auto text-xs text-gray-500">{seedResult.timeMs}ms</span>
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-0 divide-x divide-y divide-gray-100">
+                {[
+                  ["Students", seedResult.students],
+                  ["Teachers", seedResult.teachers],
+                  ["Leads", seedResult.leads],
+                  ["Tests", seedResult.tests],
+                  ["Results", seedResult.results],
+                  ["Attendance", seedResult.attendance],
+                  ["Fees", seedResult.fees],
+                  ["Payments", seedResult.payments],
+                ].map(([label, val]) => (
+                  <div key={label} className="px-3 py-2 text-center">
+                    <div className="text-sm font-bold text-gray-900">{val?.toLocaleString()}</div>
+                    <div className="text-[10px] text-gray-400 font-medium">{label}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 flex gap-3">
+                <button
+                  onClick={() => window.location.href = "/dashboard"}
+                  className="btn-primary text-xs !py-1.5"
+                >
+                  View Dashboard
+                </button>
+                <button
+                  onClick={() => window.location.href = "/leads"}
+                  className="btn-secondary text-xs !py-1.5"
+                >
+                  View Leads CRM
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Recycle Bin ── */}
+      <div className="card border border-orange-100 bg-orange-50/20">
+        <div className="flex items-start gap-4 mb-4">
+          <div className="p-2.5 bg-orange-100 text-orange-600 rounded-md flex-shrink-0">
+            <AlertTriangle size={20} strokeWidth={1.8} />
+          </div>
+          <div>
+            <div className="font-semibold text-gray-800">Recycle Bin</div>
+            <div className="text-sm text-gray-500 mt-0.5">Deleted teachers, classes, and sections are kept here. Emptying the bin permanently removes them.</div>
+          </div>
+        </div>
+        <div className="pl-16">
+          <button
+            onClick={async () => {
+              if (confirm("Are you sure you want to permanently empty the recycle bin?")) {
+                const id = toast.loading("Emptying recycle bin…");
+                try {
+                  const res = await fetch("/api/recycle-bin", { method: "DELETE" });
+                  const data = await res.json();
+                  if (res.ok) { toast.success("Recycle Bin emptied!", { id }); }
+                  else toast.error(data.error || "Failed to empty bin", { id });
+                } catch { toast.error("Network error", { id }); }
+              }
+            }}
+            className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-md shadow-sm transition-colors flex items-center gap-2"
+          >
+            <AlertTriangle size={13} /> Empty Recycle Bin
+          </button>
+        </div>
+      </div>
+
+      {/* ── Danger Zone ── */}
+      <div className="card border border-red-100 bg-red-50/20">
+        <div className="flex items-start gap-4 mb-4">
+          <div className="p-2.5 bg-red-100 text-red-600 rounded-md flex-shrink-0">
+            <Zap size={20} strokeWidth={1.8} />
+          </div>
+          <div>
+            <div className="font-semibold text-gray-800">Factory Reset</div>
+            <div className="text-sm text-gray-500 mt-0.5">Completely wipe all data for this institute. This is irreversible.</div>
+          </div>
+        </div>
+        <div className="pl-16">
+          <button
+            onClick={async () => {
+              if (confirm("DANGER: Permanently delete ALL students, teachers, results, and records? This cannot be undone.")) {
+                const id = toast.loading("Wiping all data…");
+                try {
+                  const res = await fetch("/api/factory-reset", { method: "POST" });
+                  const data = await res.json();
+                  if (res.ok) { toast.success("Factory Reset complete", { id }); window.location.reload(); }
+                  else toast.error(data.error || "Reset failed", { id });
+                } catch { toast.error("Network error", { id }); }
+              }
+            }}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-md shadow-sm transition-colors flex items-center gap-2"
+          >
+            <Zap size={13} /> Full Factory Reset
+          </button>
+          <p className="text-[10px] text-red-400 mt-2 font-medium">⚠️ Warning: ALL records will be erased forever.</p>
+        </div>
+      </div>
+
+      {/* ── Roadmap ── */}
+      <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5">
+        <div className="flex items-center gap-2.5 mb-4">
+          <Bell size={16} className="text-gray-400" strokeWidth={1.8} />
+          <h3 className="font-semibold text-gray-700 text-sm">Automation Roadmap</h3>
+        </div>
+        <div className="space-y-2 opacity-60 pointer-events-none">
+          {[
+            { label: "WhatsApp Fee Reminders", tag: "Coming Soon" },
+            { label: "Auto Attendance Alerts to Parents", tag: "Q3 2025" },
+            { label: "AI-Powered Performance Insights", tag: "Future" },
+          ].map((item, i) => (
+            <div key={i} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-md">
+              <span className="text-sm font-medium text-gray-700">{item.label}</span>
+              <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-500 rounded font-bold">{item.tag}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

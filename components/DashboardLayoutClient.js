@@ -71,9 +71,13 @@ function AvatarDropdown({ userName, role }) {
           <Link href="/profile" onClick={() => setOpen(false)} className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
             <User size={14} className="text-gray-400" /> My Profile
           </Link>
-          <Link href="/automation" onClick={() => setOpen(false)} className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-            <Settings size={14} className="text-gray-400" /> Settings
-          </Link>
+          {/* Settings is institute configuration — never shown to students.
+              Teachers get a trimmed, low-risk view; admins get the full page. */}
+          {role !== "STUDENT" && (
+            <Link href="/automation" onClick={() => setOpen(false)} className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+              <Settings size={14} className="text-gray-400" /> Settings
+            </Link>
+          )}
           <div className="border-t border-gray-100 mt-1 pt-1">
             <button onClick={signOutEverywhere} className="flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors w-full text-left">
               <LogOut size={14} /> Sign Out
